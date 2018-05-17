@@ -1,0 +1,32 @@
+* {
+	margin: 0px;
+	padding: 0px;
+}
+
+div.login-form {
+	margin-top: 20px;
+	margin-right: auto;
+	margin-left: auto;
+	width: 600px;
+	padding: 20px;
+}
+
+div.login-form div.form-footer {
+	margin-top: 10px;
+	text-align: center;
+}
+
+div.login-form div.form-group {
+	text-align: center;
+}
+
+div.results {
+	max-width: 700px;
+	margin-top: 50px;
+	margin-right: auto;
+	margin-left: auto;
+}
+
+div.results textarea {
+	width: 100%;
+}
