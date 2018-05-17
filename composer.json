@@ -1,0 +1,15 @@
+{
+    "name": "yordano/insta-ca",
+    "type": "project",
+    "autoload": {
+        "psr-4": { "InstaCA\\" : "src/" }
+    },
+    "require": {
+        "guzzlehttp/guzzle": "^6.3",
+        "nesbot/carbon": "^1.27"
+    },
+    "require-dev": {
+        "guzzlehttp/guzzle": "^6.3",
+        "nesbot/carbon": "^1.27"
+    }
+}
