@@ -74,15 +74,19 @@ class InstaCA {
 
     /**
      * Esto puede ser dinámico o variar de tiempo en tiempo.
+     * Dejada como pública para hacer pruebas de acceso a miembros
+     * de la clase cuando se esté creando una instancia.
      */
-    public $userAgent = 'Instagram 27.0.0.7.97 Android (24/7.0; 640dpi; 1440x2560; HUAWEI; LON-L29; HWLON; hi3660; en_US)';
+    public $userAgent = 'Instagram 27.0.0.7.97 ' .
+        'Android (24/7.0; 640dpi; 1440x2560; ' .
+        'HUAWEI; LON-L29; HWLON; hi3660; en_US)';
 
     /**
      * Inicia sesión en tres pasos nada mas.
      */
     public function three_steps() {
         try {
-            $credentials = $this->params($this->input);
+            $credentials = $this->getCredentials();
             $retData = $this->initialLoginData();
             $uuid = $retData['uuid'];
             $cookies = $retData['cookies'];
@@ -90,13 +94,8 @@ class InstaCA {
             $cookiesArray = $retData['cookies']->toArray();
             $csrf_token = $this->getToken($cookiesArray);
             $retData = $this->postLoginData($credentials, $uuid, $csrf_token, $cookies);
-
-            $this->session->is_logged = true;
-
             return $this->returnSuccess(true, [ 'cookies' => $retData['cookies']->toArray() ]);
-
         } catch (\Exception $ex) {
-            $this->session->is_logged = false;
             return $this->returnError($ex->getMessage());
         }
     }
@@ -108,7 +107,7 @@ class InstaCA {
      */
     public function guzzle() {
         try {
-            $credentials = $this->params($this->input);
+            $credentials = $this->getCredentials();
 
             $retData = $this->initialLoginData();
             
@@ -128,8 +127,6 @@ class InstaCA {
             $retData = array_merge($retData,
                 $this->getTimelineFeed($uuid, $csrf_token, $uuid, $cookies));
 
-            $this->session->is_logged = true;
-
             return $this->returnSuccess(true, [
                 'body' => $retData['body'],
                 'cookies'=> $retData['cookies']->toArray(),
@@ -137,7 +134,6 @@ class InstaCA {
             ]);
 
         } catch (\Exception $ex) {
-            $this->session->is_logged = false;
             return $this->returnError($ex->getMessage());
         }
     }
@@ -148,7 +144,7 @@ class InstaCA {
      */
     public function curl() {
         try {
-            $credentials = $this->params($this->input);
+            $credentials = $this->getCredentials();
 
             $retData = $this->curlMsisdnHeader();
 
@@ -167,16 +163,9 @@ class InstaCA {
                 'ci_session' => $this->session->session_id
             ]);
 
-            $this->session->is_logged = true;
-            $this->session->csrftoken = $csrf_token;
-
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header($retData['http_code'])
-                ->set_output(json_encode($retData));
+            return json_encode($retData);
 
         } catch(\Exception $ex) {
-            $this->session->is_logged = false;
             return $this->returnError($ex->getMessage());
         }
     }
@@ -185,20 +174,14 @@ class InstaCA {
         $data = array_merge($more, [
             'success' => $textOrBool,
         ]);
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(200)
-            ->set_output(json_encode($data));
+        return json_encode($data);
     }
 
     private function returnError($text, $more = []) {
         $data = array_merge($more, [
             'error' => $text,
         ]);
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(500)
-            ->set_output(json_encode($data));
+        return json_encode($data);
     }
 
     private function cookiesFromFile($cookies_file) {
@@ -330,13 +313,15 @@ class InstaCA {
      * Obtiene las credenciales de inicio de sesión ya sea
      * que se hayan enviado por POST o por GET.
      */
-    private function params($input) {
-        $username = $_REQUEST['username'];
-        $password = $_REQUEST['password'];
+    private function getCredentials() {
+        $username = in_array('username', array_keys($_REQUEST)) ?
+            $_REQUEST['username'] : null;
+        $password = in_array('password', array_keys($_REQUEST)) ?
+            $_REQUEST['password'] : null;
         if ($username === null || $password === null) {
-            $jsonArray = json_decode(file_get_contents('php://input'), true);
-            $username = $jsonArray['username'];
-            $password = $jsonArray['password'];
+            $array = json_decode(file_get_contents('php://input'), true);
+            $username = trim($array['username']) === '' ? null : $array['username'];
+            $password = trim($array['password']) === '' ? null : $array['password'];
         }
         return [
             'username' => $username,
@@ -553,12 +538,96 @@ class InstaCA {
         ];
     }
 
+    private function generateSignature($data) {
+        return hash_hmac('sha256', $data,
+            // Constante tomada de la API de Constants.php
+            '109513c04303341a7daf27bb41b268e633b30dcc65a3fe14503f743176113869');
+    }
+
+    /**
+     * Tomado de la API en Utils.php.
+     */
+    private function hashCode(
+        $string)
+    {
+        $result = 0;
+        for ($i = 0, $len = strlen($string); $i < $len; ++$i) {
+            $result = (-$result + ($result << 5) + ord($string[$i])) & 0xFFFFFFFF;
+        }
+        if (PHP_INT_SIZE > 4) {
+            if ($result > 0x7FFFFFFF) {
+                $result -= 0x100000000;
+            } elseif ($result < -0x80000000) {
+                $result += 0x100000000;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Tomado de la API en Utils.php.
+     */
+    private function reorderByHashCode(
+        array $data)
+    {
+        $hashCodes = [];
+        foreach ($data as $key => $value) {
+            $hashCodes[$key] = $this->hashCode($key);
+        }
+
+        uksort($data, function ($a, $b) use ($hashCodes) {
+            $a = $hashCodes[$a];
+            $b = $hashCodes[$b];
+            if ($a < $b) {
+                return -1;
+            } elseif ($a > $b) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+
+        return $data;
+    }
+
+    /**
+     * Tomado de la API en Signatures.php.
+     */
+    private function signData(
+        array $data,
+        array $exclude = [])
+    {
+        $result = [];
+        // Exclude some params from signed body.
+        foreach ($exclude as $key) {
+            if (isset($data[$key])) {
+                $result[$key] = $data[$key];
+                unset($data[$key]);
+            }
+        }
+        // Typecast all scalar values to string.
+        foreach ($data as &$value) {
+            if (is_scalar($value)) {
+                $value = (string) $value;
+            }
+        }
+        unset($value); // Clear reference.
+        $data = json_encode($this->reorderByHashCode($data));
+        // Este valor es de una constante de la API: Constants::SIG_KEY_VERSION
+        $result['ig_sig_key_version'] = 4;
+        $result['signed_body'] = $this->generateSignature($data).'.'.$data;
+        // Return value must be reordered.
+        return $this->reorderByHashCode($result);
+    }
+
     /**
      * Firma los datos según el formato que espera la API
      * de Instagram. Esto fue tomado de la API de GitHub.
      */
     private function signedData($data) {
-        $signed = \InstagramAPI\Signatures::signData($data);
+        //if(true){ var_dump($data); die(); }
+        $signed = $this->signData($data);
         $result = sprintf("signed_body=%s&ig_sig_key_version=%s",
             $signed['signed_body'], $signed['ig_sig_key_version']);
         return $result;
