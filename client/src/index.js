@@ -6,7 +6,7 @@ import { Redirect } from 'react-router-dom';
 import './index.css';
 
 ReactDOM.render(
-    <Home />,
+    <Home startAt="location" />,
     document.getElementById('app')
 );
 

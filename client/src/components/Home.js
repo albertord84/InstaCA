@@ -9,7 +9,7 @@ import Hashtag from './Hashtag';
 
 class Home extends Component {
     componentDidMount() {
-        window.location.href = '#/location';
+        window.location.href = '#/' + this.props.startAt;
     }
     render() {
         return (
