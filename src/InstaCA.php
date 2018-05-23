@@ -84,9 +84,17 @@ class InstaCA {
     /**
      * Inicia sesión en tres pasos nada mas.
      */
-    public function three_steps() {
+    public function three_steps($username = null, $password = null) {
         try {
-            $credentials = $this->getCredentials();
+            if (\is_null($username) && \is_null($password)){
+                $credentials = $this->getCredentials();
+            }
+            else {
+                $credentials = [
+                    'username' => $username,
+                    'password' => $password
+                ];
+            }
             $retData = $this->initialLoginData();
             $uuid = $retData['uuid'];
             $cookies = $retData['cookies'];
@@ -105,9 +113,17 @@ class InstaCA {
      * de Android. Luego de loguearse chequea los ultimos cambios
      * del timeline del perfil.
      */
-    public function guzzle() {
+    public function guzzle($username = null, $password = null) {
         try {
-            $credentials = $this->getCredentials();
+            if (\is_null($username) && \is_null($password)){
+                $credentials = $this->getCredentials();
+            }
+            else {
+                $credentials = [
+                    'username' => $username,
+                    'password' => $password
+                ];
+            }
 
             $retData = $this->initialLoginData();
             
@@ -142,9 +158,17 @@ class InstaCA {
      * Inicia sesión usando solo CURL.
      * @return string JSON con el estado del timeline de Instagram.
      */
-    public function curl() {
+    public function curl($username = null, $password = null) {
         try {
-            $credentials = $this->getCredentials();
+            if (\is_null($username) && \is_null($password)){
+                $credentials = $this->getCredentials();
+            }
+            else {
+                $credentials = [
+                    'username' => $username,
+                    'password' => $password
+                ];
+            }
 
             $retData = $this->curlMsisdnHeader();
 

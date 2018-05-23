@@ -24,6 +24,10 @@ module.exports = {
                 to: publicPath + '/js/'
             },
             {
+                from: './node_modules/popper.js/dist/umd/popper.min.js',
+                to: publicPath + '/js/'
+            },
+            {
                 from: './node_modules/bootstrap/dist/js/bootstrap.min.js',
                 to: publicPath + '/js/'
             },
