@@ -64,9 +64,11 @@ $prevCookies = [
 
     // Cookies que tienen que ser añadidas a partir de cada
     // petición hecha posterior al login
-    \GuzzleHttp\Cookie\SetCookie::fromString('igfl=yordanoweb; Path=/; Max-Age=86400; Expires=1527355947; Domain=i.instagram.com'),
+    \GuzzleHttp\Cookie\SetCookie::fromString('igfl=yordanoweb; Path=/; Max-Age=86400; ' .
+        'Expires=' . (int) (date('U') - (3600 * 24 * 2)) . '; Domain=i.instagram.com'),
     \GuzzleHttp\Cookie\SetCookie::fromString('ig_direct_region_hint=""; Expires=0; Max-Age=0; Path=/; Domain=i.instagram.com'),
-    \GuzzleHttp\Cookie\SetCookie::fromString('is_starred_enabled=yes; Max-Age=630720000; Expires=2157989845; Path=/; Domain=i.instagram.com'),
+    \GuzzleHttp\Cookie\SetCookie::fromString('is_starred_enabled=yes; Max-Age=630720000; ' .
+        'Expires=' . (int) (date('U') - (3600 * 24 * 360 * 10)) . '; Path=/; Domain=i.instagram.com'),
 ];
 
 $jar = new \GuzzleHttp\Cookie\CookieJar(false, $prevCookies);
@@ -103,6 +105,7 @@ try {
     die();
 }
 
+echo PHP_EOL . PHP_EOL . PHP_EOL;
 echo PHP_EOL . PHP_EOL . PHP_EOL . json_encode($client->getConfig('cookies')->toArray());
 echo PHP_EOL . PHP_EOL . PHP_EOL;
 
@@ -127,6 +130,7 @@ try {
     die();
 }
 
+echo PHP_EOL . PHP_EOL . PHP_EOL;
 echo PHP_EOL . PHP_EOL . PHP_EOL . json_encode($client->getConfig('cookies')->toArray());
 echo PHP_EOL . PHP_EOL . PHP_EOL;
 
@@ -157,13 +161,14 @@ try {
     die();
 }
 
+echo PHP_EOL . PHP_EOL . PHP_EOL;
 echo PHP_EOL . PHP_EOL . PHP_EOL . json_encode($client->getConfig('cookies')->toArray());
 echo PHP_EOL . PHP_EOL . PHP_EOL;
 
 echo $loginResponse->getBody() . PHP_EOL;*/
 
 $count = 15;
-$query = 'china';
+$query = 'tokyo';
 $exclude_list = '';
 $rank_token = '';
 $locationTestUrl = "https://i.instagram.com/api/v1/fbsearch/places/?timezone_offset=0" .
@@ -180,6 +185,7 @@ try {
     die();
 }
 
+echo PHP_EOL . PHP_EOL . PHP_EOL;
 echo $locationResponse->getBody() . PHP_EOL;
 echo PHP_EOL . PHP_EOL . PHP_EOL . json_encode($client->getConfig('cookies')->toArray());
 echo PHP_EOL . PHP_EOL . PHP_EOL;
