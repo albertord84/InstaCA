@@ -2,9 +2,13 @@
 
 namespace InstaCA;
 
+use \InstagramAPI\Signatures;
+use \GuzzleHttp\Cookie\SetCookie;
+use \GuzzleHttp\Cookie\CookieJar;
+
 class InstaCA {
 
-    private $debugRequest = false;
+    private $debugRequest = true;
 
     private $withProxy = false;
 
@@ -58,6 +62,7 @@ class InstaCA {
      * Cabeceras de las peticiones HTTP que no varían
      */
     private $HEADERS = [
+        'Host' => 'i.instagram.com',
         'Connection' => 'Keep-Alive',
         'Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-FB-HTTP-Engine' => 'Liger',
@@ -66,11 +71,16 @@ class InstaCA {
         'X-IG-App-ID' => '567067343352427',
         'X-IG-Capabilities' => '3brTBw==',
         'X-IG-Connection-Type' => 'WIFI',
-        'X-IG-Connection-Speed' => '2014kbps',
         'X-IG-Bandwidth-Speed-KBPS' => '-1.000',
         'X-IG-Bandwidth-TotalBytes-B' => '0',
         'X-IG-Bandwidth-TotalTime-MS' => '0',
     ];
+
+    private $username = null;
+
+    private $password = null;
+
+    public $client = null;
 
     /**
      * Esto puede ser dinámico o variar de tiempo en tiempo.
@@ -82,38 +92,27 @@ class InstaCA {
         'HUAWEI; LON-L29; HWLON; hi3660; en_US)';
 
     /**
-     * Inicia sesión en tres pasos nada mas.
+     * Simula el inicio de sesión como si fuera la aplicacion de Android,
+     * pero sólo en dos pasos. En el primer paso (initialLoginData),
+     * se obtiene el "csrftoken". En el segundo paso (syncDevice), se establece
+     * que es un dispositivo Android quien está intentando iniciar sesión.
+     * Si este segundo paso se obvia, los servidores devuelven un error
+     * informando que se está usando una versión muy vieja de la app.
+     * Por lo que es requerida la sincronización de dispositivo segundo paso).
+     * Luego, se envían las credenciales de la cuenta de usuario. Si los
+     * parámetros de usuario y contraseña fueran nulos (por defecto), se
+     * intentarán obtener del POST o del GET de la petición. Si no se obtienen
+     * de la petición, se buscará en los parámetros de línea de comando.
+     * Si no se resuelven allí, entonces se emite una excepción.
+     * 
+     * @param username (string) Nombre del usuario.
+     * @param password (string) Contraseña del usuario.
+     * 
+     * @return cookies (string) JSON con las cookies de la sesión iniciada.
+     * Con estas cookies se pueden seguir haciendo peticiones a las distintas
+     * URLs que devuelven información, hipoteticamente, durante varios meses.
      */
-    public function three_steps($username = null, $password = null) {
-        try {
-            if (\is_null($username) && \is_null($password)){
-                $credentials = $this->getCredentials();
-            }
-            else {
-                $credentials = [
-                    'username' => $username,
-                    'password' => $password
-                ];
-            }
-            $retData = $this->initialLoginData();
-            $uuid = $retData['uuid'];
-            $cookies = $retData['cookies'];
-            $retData = $this->syncDevice($uuid, $cookies);
-            $cookiesArray = $retData['cookies']->toArray();
-            $csrf_token = $this->getToken($cookiesArray);
-            $retData = $this->postLoginData($credentials, $uuid, $csrf_token, $cookies);
-            return $this->returnSuccess(true, [ 'cookies' => $retData['cookies']->toArray() ]);
-        } catch (\Exception $ex) {
-            return $this->returnError($ex->getMessage());
-        }
-    }
-
-    /**
-     * Simula el inicio de sesión como si fuera la aplicacion
-     * de Android. Luego de loguearse chequea los ultimos cambios
-     * del timeline del perfil.
-     */
-    public function guzzle($username = null, $password = null) {
+    public function login($username = null, $password = null) {
         try {
             if (\is_null($username) && \is_null($password)){
                 $credentials = $this->getCredentials();
@@ -125,217 +124,68 @@ class InstaCA {
                 ];
             }
 
-            $retData = $this->initialLoginData();
+            $initialRequestResult = $this->initialLoginData();
+            $syncDeviceRequestResult = $this->syncDevice($initialRequestResult['uuid'],
+                $initialRequestResult['cookies']);
+            $loginResponse = $this->postLoginData($initialRequestResult['uuid'],
+                $this->client->getConfig('cookies')->getCookieByName('csrftoken')->getValue(),
+                $this->client->getConfig('cookies'));
+            $sessionCookies = $this->withAdditionalCookies($loginResponse['cookies']);
             
-            $uuid = $retData['uuid'];
-            $cookies = $retData['cookies'];
-            $cookiesArray = $retData['cookies']->toArray();
-            $csrf_token = $this->getToken($cookiesArray);
-
-            $retData = array_merge($retData,
-                $this->contactPointPrefill($uuid, $csrf_token, $cookies));
-            $retData = array_merge($retData,
-                $this->syncDevice($uuid, $cookies));
-            $retData = array_merge($retData,
-                $this->logAttribution($cookies));
-            $retData = array_merge($retData,
-                $this->postLoginData($credentials, $uuid, $csrf_token, $cookies));
-            $retData = array_merge($retData,
-                $this->getTimelineFeed($uuid, $csrf_token, $uuid, $cookies));
-
-            return $this->returnSuccess(true, [
-                'body' => $retData['body'],
-                'cookies'=> $retData['cookies']->toArray(),
-                'http_code' => $retData['http_code']
-            ]);
-
-        } catch (\Exception $ex) {
-            return $this->returnError($ex->getMessage());
+            return [
+                'body' => $loginResponse['body'],
+                'cookies'=> json_encode($sessionCookies->toArray()),
+                'http_code' => $loginResponse['http_code']
+            ];
+        } catch (\Exception $loginEx) {
+            $err = sprintf("Unable to log the user %s. CAUSE: %s",
+                $this->username, $loginEx->getMessage());
+            throw new \Exception($err, 500);
         }
     }
 
     /**
-     * Inicia sesión usando solo CURL.
-     * @return string JSON con el estado del timeline de Instagram.
+     * Devuelve o crea el cliente Guzzle para hacer peticiones a los
+     * servidores remotos. Si se invoca por vez primera este método
+     * entonces se crea la instancia. Si ya está creada, se devuelve.
+     * 
+     * @param _options (array) Opciones adicionales que se le pasarán
+     * al cliente Guzzle que se ha de crear. Si ya se creó, entonces
+     * es innecesario pasar parámetros, y se devolverá la instancia
+     * previamente creada.
      */
-    public function curl($username = null, $password = null) {
-        try {
-            if (\is_null($username) && \is_null($password)){
-                $credentials = $this->getCredentials();
-            }
-            else {
-                $credentials = [
-                    'username' => $username,
-                    'password' => $password
-                ];
-            }
-
-            $retData = $this->curlMsisdnHeader();
-
-            $csrf_token = $this->tokenFromFile($retData['cookies']);
-            $retData['csrftoken'] = $csrf_token;
-
-            $retData = array_merge($retData, $this->curlPostLoginData($credentials, $retData['uuid'],
-                $csrf_token, $retData['cookies_handle'], $retData['cookies']));
-
-            $retData = array_merge($retData, $this->curlTimelineFeed($retData['uuid'],
-                $csrf_token, $retData['uuid'], $retData['cookies_handle'],
-                $retData['cookies']));
-
-            $retData = array_merge($retData, [
-                'cookies' => $this->cookiesFromFile($retData['cookies']),
-                'ci_session' => $this->session->session_id
-            ]);
-
-            return json_encode($retData);
-
-        } catch(\Exception $ex) {
-            return $this->returnError($ex->getMessage());
-        }
+    public function getGuzzleClient($_options = []) {
+        if ($this->client !== null) return $this->client;
+        $jar = new \GuzzleHttp\Cookie\CookieJar;
+        $options = [
+            'base_uri' => $this->baseUri,
+            'cookies' => $jar,
+        ];
+        $optionsCombined = array_merge($options, $_options,
+            $this->withProxy ? [ 'proxy' => $this->proxies ] : []);
+        $client = new \GuzzleHttp\Client($optionsCombined);
+        $this->client = $client;
+        return $client;
     }
 
-    private function returnSuccess($textOrBool, $more = []) {
-        $data = array_merge($more, [
-            'success' => $textOrBool,
+    private function getUserAgent() {
+        return $this->userAgent;
+    }
+
+    private function getHeaders() {
+        return array_merge($this->HEADERS, [
+            'User-Agent' => $this->getUserAgent(),
+            'X-IG-Connection-Speed' => sprintf("%skbps", (int) mt_rand(750, 2048)),
         ]);
-        return json_encode($data);
-    }
-
-    private function returnError($text, $more = []) {
-        $data = array_merge($more, [
-            'error' => $text,
-        ]);
-        return json_encode($data);
-    }
-
-    private function cookiesFromFile($cookies_file) {
-        $handle = fopen($cookies_file, "r");
-        $cookies = [];
-        if ($handle) {
-            while (($line = fgets($handle)) !== false) {
-                if (trim($line)==='' || preg_match('/^#/', $line) === 1) continue;
-                $parts = preg_split("/\s+/", $line);
-                $cookies[] = [
-                    'name' => $parts[5],
-                    'domain' => $parts[0],
-                    'path' => $parts[2],
-                    'value' => $parts[6],
-                    'expire' => $parts[4],
-                ];
-            }
-            fclose($handle);
-        } else {
-            echo 'error';
-        }
-        return $cookies;
-    }
-
-    private function curlTimelineFeed($uuid, $csrf_token, $phone_id,
-        $cookies_handle, $cookies)
-    {
-        $data = [
-            '_csrftoken' => $csrf_token,
-            '_uuid' => $uuid,
-            'is_prefetch' => '0',
-            'phone_id' => $phone_id,
-            'battery_level' => (string) (int) mt_rand(70, 100),
-            'is_charging' => '1',
-            'will_sound_on' => '1',
-            'is_on_screen' => 'true',
-            'timezone_offset' => date('Z'),
-            'is_async_ads' => '0',
-            'is_async_ads_double_request' => '0',
-            'is_async_ads_rti' => '0'
-        ];
-        $signedData = $this->signedData($data);
-        $headers = array_merge([
-            'User-Agent' => $this->userAgent,
-            'X-DEVICE-ID' => $uuid,
-            'X-Ads-Opt-Out' => '0',
-            'X-Google-AD-ID' => '0',
-        ], $this->HEADERS);
-        $ret = $this->curlRequest($this->timeLineFeedUrl, $headers, true,
-            $signedData, $this->userAgent, $cookies_handle, $cookies);
-        return $ret;
-    }
-
-    private function tokenFromFile($cookies_file) {
-        $cookiesData = json_decode($this->parseCookiesFile($cookies_file), true);
-        $csrf_token = array_reduce($cookiesData, function($acum, $cookie) {
-            if ($cookie['name'] === 'csrftoken') {
-                $acum = $cookie['value'];
-            }
-            return $acum;
-        }, '');
-        return $csrf_token;
-    }
-
-    private function curlMsisdnHeader() {
-        $uuid = $this->generateUUID();
-        $data = [
-            "_csrftoken" => null,
-            "device_id" => $uuid,
-        ];
-        $headers = $this->HEADERS;
-        $signedData = $this->signedData($data);
-        $ret = $this->curlRequest($this->initialDataUrl, $headers, true,
-            $signedData, $this->userAgent);
-        $ret['uuid'] = $uuid;
-        return $ret;
-    }
-
-    private function curlSyncDevice($uuid, $cookies_handle, $cookies) {
-        $data = [
-            'id' => $uuid,
-            'device_id' => $uuid,
-            'experiments' => $this->LOGIN_EXPERIMENTS,
-        ];
-        $signedData = $this->signedData($data);
-        $headers = $this->HEADERS;
-        $signedData = $this->signedData($data);
-        $ret = $this->curlRequest($this->syncDeviceUrl, $headers, true,
-            $signedData, $this->userAgent, $cookies_handle, $cookies);
-        return $ret;
-    }
-
-    private function curlPostLoginData($credentials, $uuid, $csrf_token, $cookies_handle, $cookies) {
-        $data = [
-            'phone_id' => $uuid,
-            '_csrftoken' => $csrf_token,
-            'username' => $credentials['username'],
-            'password' => $credentials['password'],
-            'device_id' => $this->deviceId(),
-            'login_attempt_count' => '0',
-            'adid' => $this->generateUUID(),
-            'guid' => $this->generateUUID(),
-        ];
-        $signedData = $this->signedData($data);
-        $headers = array_merge([
-            'User-Agent' => $this->userAgent,
-        ], $this->HEADERS);
-        $ret = $this->curlRequest($this->loginUrl, $headers, true,
-            $signedData, $this->userAgent, $cookies_handle, $cookies);
-        $ret['uuid'] = $uuid;
-        return $ret;
-    }
-
-    private function parseCookiesFile($cookies_file) {
-        $awk_script = __DIR__ . '/../script/parse_cookies.awk';
-        $cmd = "awk -v c=0 -f $awk_script $cookies_file";
-        return trim(shell_exec($cmd));
-    }
-
-    private function getToken(array $cookies) {
-        $_cookies = array_filter($cookies, function($cookie) {
-            return $cookie['Name'] === 'csrftoken';
-        });
-        $cookie = current($_cookies);
-        return $cookie['Value'];
     }
 
     /**
      * Obtiene las credenciales de inicio de sesión ya sea
-     * que se hayan enviado por POST o por GET.
+     * que se hayan enviado por POST o por GET. Si no están
+     * allí, se intentará tomarlas desde la línea de comandos
+     * porque pudiera ser que este script se invocó desde
+     * consola o mediante otra aplicación que no es el servidor
+     * web.
      */
     private function getCredentials() {
         $username = in_array('username', array_keys($_REQUEST)) ?
@@ -347,6 +197,15 @@ class InstaCA {
             $username = trim($array['username']) === '' ? null : $array['username'];
             $password = trim($array['password']) === '' ? null : $array['password'];
         }
+        if ($username === null || $password === null) {
+            $username = trim($argv[1]);
+            $password = trim($argv[2]);
+        }
+        if ($username === null || $password === null) {
+            throw new \Exception("Invalid username/password", 500);
+        }
+        $this->username = $username;
+        $this->password = $password;
         return [
             'username' => $username,
             'password' => $password
@@ -354,71 +213,57 @@ class InstaCA {
     }
 
     /**
-     * Esto fue tomado de la API de GitHub. Genera un identificador
-     * único necesario como parámetro en algunas peticiones que se
-     * hacen.
+     * Hace la petición inicial a los servidores remotos,
+     * para lograr que en las cookies sea situado el parámetro
+     * "csrftoken", necesario para las subsiguientes peticiones.
+     * 
+     * @return data (array) Un arreglo del que lo que más interesa
+     * es la clave 'cookies' porque contiene una referencia al
+     * objeto CookieJar donde se van almacenando las cookies con
+     * que se construirá al final la sesión que permitirá hacer
+     * peticiones posteriores sin tener que volver a autenticar.
      */
-    private function generateUUID() {
-        $uuid = sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0x0fff) | 0x4000,
-            mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff)
-        );
-        return $uuid;
-    }
-
-    private function deviceId() {
-        $megaRandomHash = md5(number_format(microtime(true), 7, '', ''));
-        return 'android-'.substr($megaRandomHash, 16);
-    }
-
-    private function getGuzzleClient($_options = []) {
-        $options = [
-            'base_uri' => $this->baseUri
-        ];
-        if ($this->withProxy) {
-            $options = array_merge($options, [
-                'proxy' => $this->proxies
+    private function initialLoginData() {
+        $uuid = Signatures::generateUUID();
+        $signedData = Signatures::signData([
+            "_csrftoken" => 'null',
+            "device_id" => $uuid,
+        ]);
+        $initialRequestBody = $this->composeRequestBody($signedData);
+        try {
+            $initialDataResponse = $this->getGuzzleClient()->post($this->initialDataUrl, [
+                'debug' => $this->debugRequest,
+                'body' => $initialRequestBody,
+                'headers' => $this->getHeaders(),
             ]);
+        } catch(\Exception $initEx) {
+            $err = sprintf("Unable to establish initial login data connection. CAUSE: %s",
+                $initEx->getMessage());
+            throw new \Exception($err, 500);
         }
-        $options = array_merge($options, $_options);
-        $client = new \GuzzleHttp\Client($options);
-        return $client;
+        $body = $initialDataResponse->getBody();
+        return [
+            'body' => $body, 'cookies' => $this->client->getConfig('cookies'),
+            'uuid' => $uuid, 'http_code' => $initialDataResponse->getStatusCode()
+        ];
     }
 
     /**
-     * @return mixed initialData
+     * Convierte los datos firmados por la API original, al formato
+     * que debe tener el cuerpo de la petición que se envía a los
+     * servidores remotos.
+     * 
+     * @param signedData (array) Arreglo que contiene los datos firmados.
+     * Este arreglo se compone de dos valores: (1) "signed_body" contiene
+     * un hash calculado a partir de todos los datos pasados en un arreglo
+     * al método \InstagramAPI\Signatures::signData de la API original, más
+     * un JSON con los datos de dicho arreglo pasado al método de la API.
+     * (2) "ig_sig_key_version", que es la versión de firmas que se está
+     * usando actualmente según lo establecen los servidores.
      */
-    private function initialLoginData() {
-        $jar = new \GuzzleHttp\Cookie\CookieJar;
-        $uuid = $this->generateUUID();
-        $data = [
-            "_csrftoken" => null,
-            "device_id" => $uuid,
-        ];
-        $client = $this->getGuzzleClient([
-            'cookies' => $jar,
-            'base_uri' => $this->baseUri
-        ]);
-        $signedData = $this->signedData($data);
-        $response = $client->post($this->initialDataUrl, [
-            'debug' => $this->debugRequest,
-            'body' => $signedData,
-            'headers' => array_merge([
-                'User-Agent' => $this->userAgent,
-            ], $this->HEADERS)
-        ]);
-        $body = $response->getBody();
-        return [
-            'body' => $body, 'cookies' => $jar,
-            'uuid' => $uuid, 'http_code' => $response->getStatusCode()
-        ];
+    private function composeRequestBody($signedData) {
+        return sprintf("signed_body=%s&ig_sig_key_version=%s",
+            $signedData['signed_body'], $signedData['ig_sig_key_version']);
     }
 
     private function contactPointPrefill($uuid, $csrf_token, $cookies) {
@@ -446,29 +291,41 @@ class InstaCA {
     }
 
     /**
-     * @return mixed initialData
+     * Hace la segunda petición a los servidores remotos, donde
+     * se envía un largo parámetro (experiments) que permite
+     * informar a los servidores que el acceso se está haciendo
+     * desde un dispositivo móvil.
+     * 
+     * @return data (array) Un arreglo del que lo que más interesa
+     * es la clave 'cookies' porque contiene una referencia al
+     * objeto CookieJar donde se van almacenando las cookies con
+     * que se construirá al final la sesión que permitirá hacer
+     * peticiones posteriores sin tener que volver a autenticar.
      */
     private function syncDevice($uuid, $cookies) {
-        $data = [
+        $signedData = Signatures::signData([
             'id' => $uuid,
             'device_id' => $uuid,
             'experiments' => $this->LOGIN_EXPERIMENTS,
-        ];
-        $client = $this->getGuzzleClient([
-            'cookies' => $cookies,
         ]);
-        $signedData = $this->signedData($data);
-        $response = $client->post('api/v1/qe/sync/', [
-            'debug' => $this->debugRequest,
-            'body' => $signedData,
-            'headers' => array_merge([
-                'User-Agent' => $this->userAgent,
-            ], $this->HEADERS)
-        ]);
-        $body = $response->getBody();
+        $syncDeviceRequestBody = $this->composeRequestBody($signedData);
+        try {
+            $syncDeviceResponse = $this->client->post('api/v1/qe/sync/', [
+                'debug' => $this->debugRequest,
+                'body' => $syncDeviceRequestBody,
+                'headers' => array_merge([
+                    'User-Agent' => $this->userAgent,
+                ], $this->getHeaders())
+            ]);
+        } catch(\Exception $syncEx) {
+            $err = sprintf("Unable to sync device features. CAUSE: %s",
+                $syncEx->getMessage());
+            throw new \Exception($err, 500);
+        }
+        $body = $syncDeviceResponse->getBody();
         return [
-            'body' => $body, 'cookies' => $cookies,
-            'http_code' => $response->getStatusCode()
+            'body' => $body, 'cookies' => $this->client->getConfig('cookies'),
+            'http_code' => $syncDeviceResponse->getStatusCode()
         ];
     }
 
@@ -497,33 +354,68 @@ class InstaCA {
     /**
      * @return mixed successOrFailureLoginData
      */
-    private function postLoginData($credentials, $uuid, $csrf_token, $cookies) {
-        $data = [
+    private function postLoginData($uuid, $csrf_token, $cookies) {
+        $signedData = Signatures::signData([
             'phone_id' => $uuid,
             '_csrftoken' => $csrf_token,
-            'username' => $credentials['username'],
-            'password' => $credentials['password'],
-            'device_id' => $this->deviceId(),
+            'username' => $this->username,
+            'password' => $this->password,
+            'device_id' => Signatures::generateDeviceId(),
             'login_attempt_count' => '0',
-            'adid' => $this->generateUUID(),
-            'guid' => $this->generateUUID(),
-        ];
-        $client = $this->getGuzzleClient([
-            'cookies' => $cookies,
+            'adid' => Signatures::generateUUID(),
+            'guid' => Signatures::generateUUID(),
         ]);
-        $signedData = $this->signedData($data);
-        $response = $client->post($this->loginUrl, [
-            'debug' => $this->debugRequest,
-            'body' => $signedData,
-            'headers' => array_merge([
-                'User-Agent' => $this->userAgent,
-            ], $this->HEADERS)
-        ]);
-        $body = $response->getBody();
+        $loginRequestBody = $this->composeRequestBody($signedData);
+        try {
+            $loginResponse = $this->client->post($this->loginUrl, [
+                'debug' => $this->debugRequest,
+                'body' => $loginRequestBody,
+                'headers' => array_merge([
+                    'User-Agent' => $this->userAgent,
+                ], $this->getHeaders())
+            ]);
+        } catch (\Exception $loginEx) {
+            $err = sprintf("Unable to post user %s credentials. CAUSE: %s",
+                $this->username, $loginEx->getMessage());
+            throw new \Exception($err, 500);
+        }
+        $body = $loginResponse->getBody();
         return [
-            'http_code' => $response->getStatusCode(),
-            'body' => $body, 'cookies' => $cookies,
+            'body' => $body,
+            'cookies' => $this->client->getConfig('cookies'),
+            'http_code' => $loginResponse->getStatusCode(),
         ];
+    }
+
+    /**
+     * Agrega a las cookies de las peticiones que se han hecho, tres
+     * cookies que permiten a los servidores remotos identificar si
+     * ya la sesión se abrió anteriormente. Si estas cookies no están
+     * presentes en peticiones posteriores, serán rechazadas con un
+     * mensaje de "login_required".
+     * 
+     * @return data (CookieJar) Un CookieJar que contiene las cookies
+     * acumuladas a través de cada petición, más las requeridas para
+     * las peticiones posteriores al inicio de sesión. Este CookieJar
+     * luego se puede serializar, convertir a JSON, o guardar de cualquier
+     * otra forma, para reusarlo todas las veces que se quiera sin tener
+     * que iniciar sesión de nuevo.
+     */
+    private function withAdditionalCookies(CookieJar $currentCookies) {
+        $cookies = CookieJar::fromArray($currentCookies->toArray(), 'i.instagram.com');
+        $igflCookie = SetCookie::fromString('igfl=' . $this->username .
+            '; Path=/; Max-Age=86400; ' .
+            // Expired two days before. We know nothing about this, but works...
+            'Expires=' . (int) (date('U') - (3600 * 24 * 2)) . '; Domain=i.instagram.com');
+        $cookies->setCookie($igflCookie);
+        $igDirectRegionCookie = SetCookie::fromString('ig_direct_region_hint=""; ' .
+            'Expires=0; Max-Age=0; Path=/; Domain=i.instagram.com');
+        $cookies->setCookie($igDirectRegionCookie);
+        $starredCookie = SetCookie::fromString('is_starred_enabled=yes; Max-Age=630720000; ' .
+            // Expires far away in the future...
+            'Expires=' . (int) (date('U') - (3600 * 24 * 360 * 10)) . '; Path=/; Domain=i.instagram.com');
+        $cookies->setCookie($starredCookie);
+        return $cookies;
     }
 
     private function getTimelineFeed($uuid, $csrf_token, $phone_id, $cookies) {
@@ -562,151 +454,4 @@ class InstaCA {
         ];
     }
 
-    private function generateSignature($data) {
-        return hash_hmac('sha256', $data,
-            // Constante tomada de la API de Constants.php
-            '109513c04303341a7daf27bb41b268e633b30dcc65a3fe14503f743176113869');
-    }
-
-    /**
-     * Tomado de la API en Utils.php.
-     */
-    private function hashCode(
-        $string)
-    {
-        $result = 0;
-        for ($i = 0, $len = strlen($string); $i < $len; ++$i) {
-            $result = (-$result + ($result << 5) + ord($string[$i])) & 0xFFFFFFFF;
-        }
-        if (PHP_INT_SIZE > 4) {
-            if ($result > 0x7FFFFFFF) {
-                $result -= 0x100000000;
-            } elseif ($result < -0x80000000) {
-                $result += 0x100000000;
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Tomado de la API en Utils.php.
-     */
-    private function reorderByHashCode(
-        array $data)
-    {
-        $hashCodes = [];
-        foreach ($data as $key => $value) {
-            $hashCodes[$key] = $this->hashCode($key);
-        }
-
-        uksort($data, function ($a, $b) use ($hashCodes) {
-            $a = $hashCodes[$a];
-            $b = $hashCodes[$b];
-            if ($a < $b) {
-                return -1;
-            } elseif ($a > $b) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
-
-        return $data;
-    }
-
-    /**
-     * Tomado de la API en Signatures.php.
-     */
-    private function signData(
-        array $data,
-        array $exclude = [])
-    {
-        $result = [];
-        // Exclude some params from signed body.
-        foreach ($exclude as $key) {
-            if (isset($data[$key])) {
-                $result[$key] = $data[$key];
-                unset($data[$key]);
-            }
-        }
-        // Typecast all scalar values to string.
-        foreach ($data as &$value) {
-            if (is_scalar($value)) {
-                $value = (string) $value;
-            }
-        }
-        unset($value); // Clear reference.
-        $data = json_encode($this->reorderByHashCode($data));
-        // Este valor es de una constante de la API: Constants::SIG_KEY_VERSION
-        $result['ig_sig_key_version'] = 4;
-        $result['signed_body'] = $this->generateSignature($data).'.'.$data;
-        // Return value must be reordered.
-        return $this->reorderByHashCode($result);
-    }
-
-    /**
-     * Firma los datos según el formato que espera la API
-     * de Instagram. Esto fue tomado de la API de GitHub.
-     */
-    private function signedData($data) {
-        //if(true){ var_dump($data); die(); }
-        $signed = $this->signData($data);
-        $result = sprintf("signed_body=%s&ig_sig_key_version=%s",
-            $signed['signed_body'], $signed['ig_sig_key_version']);
-        return $result;
-    }
-
-    /**
-     * Hace una petición CURL a la API a partir de la URI base
-     * definida en $this->baseUri.
-     * 
-     * @param url String con la URL a la que se hará la petición.
-     * @param headers Arreglo con las cabeceras que se enviarán en la petición.
-     * @param post Verdadero si la petición será por POST, falso si será por GET.
-     * @param user_agent String con el agente de usuario que se simulará como autor
-     * de las peticiones.
-     * @param cookies_handle Número que identifica el archivo único que se encuentra
-     * en /tmp conteniendo las cookies de peticiones anteriores para así continuar
-     * con el estado de la sesión previamente iniciada. Si es cero, entonces esta
-     * es la primera petición que se hace.
-     * @param cookies_file String con el nombre del archivo que contiene las cookies
-     * creadas en peticiones anteriores.
-     */
-    private function curlRequest($url, $headers, $post, $post_data,
-        $user_agent, $cookies_handle = 0, $cookies_file = null)
-    {
-        if ($cookies !== null) {
-            $headers['Cookie'] = $cookies;
-        }
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->baseUri . "/$url");
-        curl_setopt($ch, CURLOPT_USERAGENT, $user_agent);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        if ($post) {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-        }
-
-        $t = $cookies_handle === 0 ? date("U") : $cookies_handle;
-        $cookies_file = "/tmp/cookies.$t.txt";
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookies_file);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookies_file);
-
-        $response = curl_exec($ch);
-        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        return [
-            'http_code' => $http,
-            'response' => (string) $response,
-            'cookies' => file_exists($cookies_file) ? $cookies_file : null,
-            'cookies_handle' => $t,
-            'error' => $error,
-        ];
-    }
 }
