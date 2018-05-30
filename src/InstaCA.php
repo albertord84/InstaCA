@@ -8,7 +8,7 @@ use \GuzzleHttp\Cookie\CookieJar;
 
 class InstaCA {
 
-    private $debugRequest = true;
+    private $debugRequest = false;
 
     private $withProxy = false;
 
@@ -134,7 +134,7 @@ class InstaCA {
             
             return [
                 'body' => $loginResponse['body'],
-                'cookies'=> json_encode($sessionCookies->toArray()),
+                'cookies'=> $sessionCookies,
                 'http_code' => $loginResponse['http_code']
             ];
         } catch (\Exception $loginEx) {
@@ -394,28 +394,30 @@ class InstaCA {
      * presentes en peticiones posteriores, serán rechazadas con un
      * mensaje de "login_required".
      * 
-     * @return data (CookieJar) Un CookieJar que contiene las cookies
+     * @return data (array) Un arreglo que contiene las cookies
      * acumuladas a través de cada petición, más las requeridas para
-     * las peticiones posteriores al inicio de sesión. Este CookieJar
+     * las peticiones posteriores al inicio de sesión. Este arreglo
      * luego se puede serializar, convertir a JSON, o guardar de cualquier
      * otra forma, para reusarlo todas las veces que se quiera sin tener
      * que iniciar sesión de nuevo.
      */
     private function withAdditionalCookies(CookieJar $currentCookies) {
-        $cookies = CookieJar::fromArray($currentCookies->toArray(), 'i.instagram.com');
         $igflCookie = SetCookie::fromString('igfl=' . $this->username .
             '; Path=/; Max-Age=86400; ' .
-            // Expired two days before. We know nothing about this, but works...
+            // Expira dos días antes. No se la razón, pero funciona bien así...
             'Expires=' . (int) (date('U') - (3600 * 24 * 2)) . '; Domain=i.instagram.com');
-        $cookies->setCookie($igflCookie);
         $igDirectRegionCookie = SetCookie::fromString('ig_direct_region_hint=""; ' .
             'Expires=0; Max-Age=0; Path=/; Domain=i.instagram.com');
-        $cookies->setCookie($igDirectRegionCookie);
         $starredCookie = SetCookie::fromString('is_starred_enabled=yes; Max-Age=630720000; ' .
-            // Expires far away in the future...
+            // Expira muy, muy lejos en el  futuro. Tampoco conozco la razón...
             'Expires=' . (int) (date('U') - (3600 * 24 * 360 * 10)) . '; Path=/; Domain=i.instagram.com');
-        $cookies->setCookie($starredCookie);
-        return $cookies;
+        $additionalCookies = [
+            $igflCookie->toArray(),
+            $igDirectRegionCookie->toArray(),
+            $starredCookie->toArray(),
+        ];
+        $cookiesArray = array_merge($currentCookies->toArray(), $additionalCookies);
+        return $cookiesArray;
     }
 
     private function getTimelineFeed($uuid, $csrf_token, $phone_id, $cookies) {
