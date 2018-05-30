@@ -6,7 +6,8 @@
     },
     "require": {
         "guzzlehttp/guzzle": "^6.3",
-        "nesbot/carbon": "^1.27"
+        "nesbot/carbon": "^1.27",
+        "mgp25/instagram-php": "^4.1"
     },
     "require-dev": {
         "guzzlehttp/guzzle": "^6.3",
