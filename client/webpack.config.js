@@ -2,7 +2,6 @@ const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebPackPlugin = require('html-webpack-plugin');
 const CleanWebPackPlugin = require('clean-webpack-plugin');
 const CleanObsoleteChunks = require('webpack-clean-obsolete-chunks');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const path = require('path');
 
 const publicPath = path.resolve('../public');
@@ -19,9 +18,6 @@ module.exports = {
         new CleanWebPackPlugin([publicPath], { allowExternal: true }),
         new HtmlWebPackPlugin({ template: 'index.html' }),
         new CleanObsoleteChunks(),
-        new UglifyJsPlugin({
-            test: /\.js($|\?)/i
-        }),
         new CopyWebpackPlugin([
             {
                 from: './node_modules/jquery/dist/jquery.min.js',
