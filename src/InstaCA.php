@@ -107,22 +107,18 @@ class InstaCA {
      * 
      * @param username (string) Nombre del usuario.
      * @param password (string) Contraseña del usuario.
-     * 
-     * @return cookies (string) JSON con las cookies de la sesión iniciada.
-     * Con estas cookies se pueden seguir haciendo peticiones a las distintas
-     * URLs que devuelven información, hipoteticamente, durante varios meses.
+     * @return cookies (array) Arreglo que incluye las cookies de la sesión
+     * iniciada. Con estas cookies se pueden seguir haciendo peticiones a
+     * las distintas URLs que devuelven información, hipoteticamente, durante
+     * varios meses.
      */
     public function login($username = null, $password = null) {
         try {
             if (\is_null($username) && \is_null($password)){
-                $credentials = $this->getCredentials();
+                throw new \Exception('You must supply the right credentials (username/password)', 500);
             }
-            else {
-                $credentials = [
-                    'username' => $username,
-                    'password' => $password
-                ];
-            }
+            $this->username = $username;
+            $this->password = $password;
 
             $initialRequestResult = $this->initialLoginData();
             $syncDeviceRequestResult = $this->syncDevice($initialRequestResult['uuid'],
@@ -172,7 +168,7 @@ class InstaCA {
         return $this->userAgent;
     }
 
-    private function getHeaders() {
+    public function getHeaders() {
         return array_merge($this->HEADERS, [
             'User-Agent' => $this->getUserAgent(),
             'X-IG-Connection-Speed' => sprintf("%skbps", (int) mt_rand(750, 2048)),
