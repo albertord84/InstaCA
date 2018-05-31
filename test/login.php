@@ -29,7 +29,18 @@ $password = in_array('password', array_keys($_REQUEST)) ?
 		</div>
 	<?php } ?>
 	<div class="results">
-		<textarea rows="20"><?php if (trim($username) !== '') echo $insta->guzzle(); ?></textarea>
+		<?php
+		$response = null;
+		if (trim($username) !== '') {
+			try {
+				$response = $insta->login();
+			}
+			catch (\Exception $ex) {
+				$response = $ex->getMessage();
+			}
+		}
+		?>
+		<textarea rows="20"><?php echo json_encode($response['cookies']); ?></textarea>
 	</div>
 </body>
 </html>
