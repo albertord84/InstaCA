@@ -23,6 +23,7 @@ class Location extends Component {
         this.postInputQuery = this.postInputQuery.bind(this);
         this.handlePostQueryError = this.handlePostQueryError.bind(this);
         this.handlePostQuerySuccess = this.handlePostQuerySuccess.bind(this);
+        this.searchMore = this.searchMore.bind(this);
     }
     componentDidMount() {
         this.bindLocationInput();
@@ -89,6 +90,9 @@ class Location extends Component {
         .then(this.handlePostQuerySuccess)
         .catch(this.handlePostQueryError);
     }
+    searchMore() {
+
+    }
     bindLocationInput() {
         fromEvent(this.inputLocation.current, 'keyup')
         .pipe(
@@ -103,6 +107,8 @@ class Location extends Component {
     render() {
         const locations = this.state.locations;
         const error = this.state.error;
+        const hasMore = this.state.hasMore;
+        const searching = this.state.searching;
         const redirectSubmit = (ev) => {
             ev.preventDefault();
             this.postInputQuery(this.inputLocation.current.value);
@@ -127,10 +133,19 @@ class Location extends Component {
                 </div>
                 { error !== null ? <AlertError error={error} /> : '' }
                 { locations.length > 0 ? locationsList(locations) : '' }
+                { hasMore ? <MoreButton searching={searching} searchMore={this.searchMore} /> : '' }
             </div>
         )
     }
 }
+
+const MoreButton = (props) => (
+    <div className="row justify-content-center mt-3 mb-3">
+        <button className="btn btn-primary btn-sm"
+            disabled={props.searching}
+            onClick={props.searchMore}><small>More...</small></button>
+    </div>
+);
 
 const Item = (props) => (
     <div className="location mt-2 mr-2 ml-2">
@@ -144,7 +159,8 @@ const Item = (props) => (
 
 const locationsList = (locations) => {
     const list = locations.map(item => {
-        return <Item key={item.key + _.uniqueId()} name={item.name} />
+        return <Item key={item.key + _.uniqueId()}
+            name={item.name} lat={item.lat} lng={item.lng} />
     });
     return (
         <div className="d-flex justify-content-center">
