@@ -1,5 +1,5 @@
 window.dumbu = 'undefined' !== typeof window.dumbu ? window.dumbu : {
-    username: '',
-    password: '',
+    username: 'yordanoweb',
+    password: 'Kaperuza25',
     cookies: []
 };

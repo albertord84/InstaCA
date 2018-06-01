@@ -16,7 +16,8 @@ class Location extends Component {
             locations: [],
             searching: false,
             error: null,
-            hasMore: false
+            hasMore: false,
+            rankToken: ''
         };
         this.inputLocation = React.createRef();
         this.bindLocationInput = this.bindLocationInput.bind(this);
@@ -41,6 +42,7 @@ class Location extends Component {
         return translatedPath;
     }
     handlePostQueryError(reason) {
+        console.log(arguments);
         setTimeout(() => {
             this.setState({
                 searching: false,
@@ -50,6 +52,7 @@ class Location extends Component {
         }, 1000);
     }
     handlePostQuerySuccess(response) {
+        const currentLocations = this.state.locations;
         const data = response.data;
         const locations = data.ig.items
             .filter(item => !_.isUndefined(item.location))
@@ -58,7 +61,8 @@ class Location extends Component {
             dumbu.cookies = data.cookies;
             this.setState({
                 searching: false,
-                locations: locations,
+                locations: currentLocations.concat(locations),
+                rankToken: data.ig.rank_token,
                 hasMore: data.ig.has_more
             });
         }, 1000);
@@ -72,26 +76,47 @@ class Location extends Component {
     }
     postInputQuery(query) {
         if (this.state.searching) return;
-        this.setState({ error: null });
         if (!this.validCredentials()) return;
+        this.setState({ error: null, searching: true });
         const dumbu = window.dumbu;
         const pathName = window.location.pathname;
         const path = this.translateToServerSide(pathName);
-        this.setState({ searching: true });
         axios.post(path + '/location.php', {
             username: dumbu.username,
             password: dumbu.password,
             cookies: dumbu.cookies,
             count: 10,
             location: query,
-            exclude_list: [],
-            rank_token: ''
+            exclude_list: this.excludeList(this.state.locations),
+            rank_token: this.state.rankToken
         })
         .then(this.handlePostQuerySuccess)
         .catch(this.handlePostQueryError);
     }
+    excludeList(locations) {
+        let initial = '';
+        const reducer = (acc, current, index, allItems) => {
+            return acc += (index !== 0 ? ',' : '') + current.facebook_places_id;
+        }
+        return locations.reduce(reducer, initial);
+    }
     searchMore() {
-
+        this.setState({ error: null, searching: true });
+        const dumbu = window.dumbu;
+        const pathName = window.location.pathname;
+        const query = this.inputLocation.current.value;
+        const path = this.translateToServerSide(pathName);
+        axios.post(path + '/location.php', {
+            username: dumbu.username,
+            password: dumbu.password,
+            cookies: dumbu.cookies,
+            count: 10,
+            location: query,
+            exclude_list: this.excludeList(this.state.locations),
+            rank_token: this.state.rankToken
+        })
+        .then(this.handlePostQuerySuccess)
+        .catch(this.handlePostQueryError);
     }
     bindLocationInput() {
         fromEvent(this.inputLocation.current, 'keyup')
@@ -133,7 +158,11 @@ class Location extends Component {
                 </div>
                 { error !== null ? <AlertError error={error} /> : '' }
                 { locations.length > 0 ? locationsList(locations) : '' }
-                { hasMore ? <MoreButton searching={searching} searchMore={this.searchMore} /> : '' }
+                { 
+                    hasMore && error === null ?
+                    <MoreButton searching={searching} searchMore={this.searchMore} />
+                    : ''
+                }
             </div>
         )
     }
@@ -163,7 +192,7 @@ const locationsList = (locations) => {
             name={item.name} lat={item.lat} lng={item.lng} />
     });
     return (
-        <div className="d-flex justify-content-center">
+        <div className="d-flex justify-content-center mb-3">
             <div className="locations-list row justify-content-center">
                 {list}
             </div>
@@ -173,7 +202,7 @@ const locationsList = (locations) => {
 
 const AlertError = (props) => (
     <div className="row d-flex justify-content-center">
-        <div className="alert alert-danger mt-3">
+        <div className="alert alert-danger mt-3 small">
             <strong>Error:</strong> {props.error}
         </div>
     </div>

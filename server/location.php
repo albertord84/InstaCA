@@ -4,13 +4,15 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use \InstaCA\InstaCA;
 use \InstagramAPI\Signatures;
+use \InstagramAPI\Exception\RequestHeadersTooLargeException;
 use \GuzzleHttp\Cookie\SetCookie;
 use \GuzzleHttp\Cookie\CookieJar;
 
-$requestData = json_decode(file_get_contents('php://input'));
-$cookies = $requestData->cookies;
+$requestData = json_decode(file_get_contents('php://input'), true);
+$cookies = $requestData['cookies'];
+$insta = new InstaCA();
 
-if (trim($requestData->username) === '' || trim($requestData->password) === '') {
+if (trim($requestData['username']) === '' || trim($requestData['password']) === '') {
     header('Content-Type: text/json; charset=UTF-8', true);
     header('Status: 500', true, 500);
     $response = [
@@ -23,20 +25,24 @@ if (trim($requestData->username) === '' || trim($requestData->password) === '') 
 
 if (count($cookies)===0) {
     // must login
-    $insta = new InstaCA();
-    $loginResp = $insta->login($requestData->username, $requestData->password);
+    $loginResp = $insta->login($requestData['username'], $requestData['password']);
     $cookies = $loginResp['cookies'];
 }
 
-$query = $requestData->location;
-$count = $requestData->count;
-$rank_token = $requestData->rank_token;
-$exclude_list = join(',', $requestData->exclude_list);
+$query = $requestData['location'];
+$count = $requestData['count'];
+$rank_token = $requestData['rank_token'];
+$exclude_list = $requestData['exclude_list'];
 
 $locationSearchUrl = "https://i.instagram.com/api/v1/fbsearch/places/?timezone_offset=0" .
         "&count=$count&query=$query&exclude_list=[$exclude_list]&rank_token=$rank_token";
 
-$jar = new CookieJar(false, $cookies);
+$cookiesArray = array_reduce($cookies, function($array, $cookie) {
+    $array[] = new SetCookie($cookie);
+    return $array;
+}, []);
+
+$jar = new CookieJar(false, $cookiesArray);
 $client = new \GuzzleHttp\Client([
     'cookies' => $jar,
 ]);
@@ -46,11 +52,26 @@ try {
         // 'debug' => true,
         'headers' => $insta->getHeaders(),
     ]);
-} catch(\Exception $initEx) {
+} catch(RequestHeadersTooLargeException $tooLargeEx) {
+    header('Content-Type: text/json; charset=UTF-8', true);
+    header('Status: 200', true, 200);
+    $response = [
+        'success' => true,
+        'cookies' => $client->getConfig('cookies')->toArray(),
+        'ig' => [
+            'items' => [],
+            'has_more' => 'false'
+        ],
+    ];
+    echo json_encode($response);
+    die();
+} catch(\Exception $locSearchEx) {
     header('Content-Type: text/json; charset=UTF-8', true);
     header('Status: 500', true, 500);
+    $message = sprintf('Unable to request location list matching %s. CAUSE: %s',
+        $query, $locSearchEx->getMessage());
     $response = [
-        'message' => 'Unable to request location list matching ' . $query,
+        'message' => $message,
         'success' => false
     ];
     echo json_encode($response);
