@@ -1,12 +1,7 @@
 import React, { Component } from 'react';
 import { withRouter } from 'react-router';
 import { Observable, fromEvent, range } from 'rxjs';
-
-import { 
-    map, filter, debounceTime,
-    distinctUntilChanged, scan
-} from 'rxjs/operators';
-
+import { map, filter, debounceTime, distinctUntilChanged, scan } from 'rxjs/operators';
 import axios from 'axios';
 
 class Location extends Component {
@@ -42,7 +37,7 @@ class Location extends Component {
         return translatedPath;
     }
     handlePostQueryError(reason) {
-        console.log(arguments);
+        console.log(reason);
         setTimeout(() => {
             this.setState({
                 searching: false,
@@ -54,14 +49,13 @@ class Location extends Component {
     handlePostQuerySuccess(response) {
         const currentLocations = this.state.locations;
         const data = response.data;
-        const locations = data.ig.items
-            .filter(item => !_.isUndefined(item.location))
-            .map(item => item.location);
+        const locations = data.ig.items.map(item => item.location);
+        // const newLocationsList = this.excludeFetched(currentLocations, locations);
         setTimeout(() => {
             dumbu.cookies = data.cookies;
             this.setState({
                 searching: false,
-                locations: currentLocations.concat(locations),
+                locations: currentLocations.concat(locations), // newLocationsList,
                 rankToken: data.ig.rank_token,
                 hasMore: data.ig.has_more
             });
@@ -73,6 +67,19 @@ class Location extends Component {
         }
         this.setState({ error: 'You must establish user credentials (username/password) first...' });
         return false;
+    }
+    excludeFetched(currentLocations, fetchedLocations) {
+        if (currentLocations.length === 0) return fetchedLocations;
+        var trulyNewLocations = [];
+        var currentIds = currentLocations.reduce(function(prev, currentLoc, arr) {
+          return prev.concat(currentLoc.facebook_places_id);
+        }, []);
+        fetchedLocations.forEach(function (loc, i, arr) {
+          if (!currentIds.includes(loc.facebook_places_id)) {
+            trulyNewLocations.push(loc);
+          }
+        });
+        return current.concat(trulyNewLocations);
     }
     postInputQuery(query) {
         if (this.state.searching) return;
@@ -181,15 +188,17 @@ const Item = (props) => (
         <div className="border rounded p-3 box-shadow">
             <div className="">
                 <p className="mt-0 text-muted small text-center">{props.name}</p>
+                <p className="mt-2 mb-2 small text-center"><small>Lat: {props.lat}</small></p>
+                <p className="mt-0 small text-center"><small>Lng: {props.lng}</small></p>
             </div>
         </div>
     </div>
 );
 
 const locationsList = (locations) => {
-    const list = locations.map(item => {
-        return <Item key={item.key + _.uniqueId()}
-            name={item.name} lat={item.lat} lng={item.lng} />
+    const list = locations.map(loc => {
+        return <Item key={loc.facebook_places_id + _.uniqueId()}
+            name={loc.name} lat={loc.lat} lng={loc.lng} />
     });
     return (
         <div className="d-flex justify-content-center mb-3">

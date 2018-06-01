@@ -47,6 +47,7 @@ $client = new \GuzzleHttp\Client([
     'cookies' => $jar,
 ]);
 
+sleep(mt_rand(2, 3));
 try {
     $locationResponse = $client->get($locationSearchUrl, [
         // 'debug' => true,
