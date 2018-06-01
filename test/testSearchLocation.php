@@ -8,7 +8,7 @@ $query = urlencode($location);
 
 set_time_limit(0);
 date_default_timezone_set('UTC');
-require __DIR__ . '/../server/vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 $debug = true;
 $truncatedDebug = false;
 
