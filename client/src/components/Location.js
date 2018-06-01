@@ -15,14 +15,14 @@ class Location extends Component {
         this.state = {
             locations: [],
             searching: false,
-            error: null
+            error: null,
+            hasMore: false
         };
         this.inputLocation = React.createRef();
         this.bindLocationInput = this.bindLocationInput.bind(this);
         this.postInputQuery = this.postInputQuery.bind(this);
         this.handlePostQueryError = this.handlePostQueryError.bind(this);
         this.handlePostQuerySuccess = this.handlePostQuerySuccess.bind(this);
-        window._state = this.state;
     }
     componentDidMount() {
         this.bindLocationInput();
@@ -49,9 +49,17 @@ class Location extends Component {
         }, 1000);
     }
     handlePostQuerySuccess(response) {
+        const data = response.data;
+        const locations = data.ig.items
+            .filter(item => !_.isUndefined(item.location))
+            .map(item => item.location);
         setTimeout(() => {
-            dumbu.cookies = response.data.cookies;
-            this.setState({ searching: false, locations: response.data.ig.items });
+            dumbu.cookies = data.cookies;
+            this.setState({
+                searching: false,
+                locations: locations,
+                hasMore: data.ig.has_more
+            });
         }, 1000);
     }
     validCredentials() {
@@ -62,6 +70,7 @@ class Location extends Component {
         return false;
     }
     postInputQuery(query) {
+        if (this.state.searching) return;
         this.setState({ error: null });
         if (!this.validCredentials()) return;
         const dumbu = window.dumbu;
@@ -94,6 +103,10 @@ class Location extends Component {
     render() {
         const locations = this.state.locations;
         const error = this.state.error;
+        const redirectSubmit = (ev) => {
+            ev.preventDefault();
+            this.postInputQuery(this.inputLocation.current.value);
+        }
         return (
             <div className="location-search">
                 <div className="text-center text-muted mb-3">
@@ -101,7 +114,8 @@ class Location extends Component {
                 </div>
                 <div className="row justify-content-center">
                     <div className="col-8">
-                        <form action="" method="POST" className="mr-5 ml-5">
+                        <form action="" method="POST" className="mr-5 ml-5"
+                            onSubmit={redirectSubmit}>
                             <div className="form-group">
                                 <input type="text" className="form-control form-control-lg"
                                     placeholder="Type to search Instagram location..."
@@ -111,31 +125,42 @@ class Location extends Component {
                         </form>
                     </div>
                 </div>
-                { 
-                    error !== null ?
-                        <div className="row d-flex justify-content-center">
-                            <div className="alert alert-danger mt-3">
-                                <strong>Error:</strong> {error}
-                            </div>
-                        </div>
-                    : ''
-                }
-                {
-                    locations.length > 0 ?
-                        locations.map(item => <Item key={item.location.pk} data={item.location} />)
-                    : ''
-                }
+                { error !== null ? <AlertError error={error} /> : '' }
+                { locations.length > 0 ? locationsList(locations) : '' }
             </div>
         )
     }
 }
 
-const Item = (location) => <div className="row mt-2">
-    <div className="media">
-        <div className="media-body">
-            <h5 className="mt-0">{location.name}</h5>
+const Item = (props) => (
+    <div className="location mt-2 mr-2 ml-2">
+        <div className="border rounded p-3 box-shadow">
+            <div className="">
+                <p className="mt-0 text-muted small text-center">{props.name}</p>
+            </div>
         </div>
     </div>
-</div>
+);
+
+const locationsList = (locations) => {
+    const list = locations.map(item => {
+        return <Item key={item.key + _.uniqueId()} name={item.name} />
+    });
+    return (
+        <div className="d-flex justify-content-center">
+            <div className="locations-list row justify-content-center">
+                {list}
+            </div>
+        </div>
+    );
+};
+
+const AlertError = (props) => (
+    <div className="row d-flex justify-content-center">
+        <div className="alert alert-danger mt-3">
+            <strong>Error:</strong> {props.error}
+        </div>
+    </div>
+);
 
 export default withRouter(Location);

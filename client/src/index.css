@@ -19,3 +19,11 @@ nav div.float-right div.dropdown-menu form {
 nav div.float-right div.dropdown-menu form input.form-control::placeholder {
     font-size: 13px;
 }
+
+.locations-list {
+    max-width: 600px;
+}
+
+.locations-list .location {
+    width: 150px;
+}
