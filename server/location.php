@@ -50,30 +50,22 @@ $client = new \GuzzleHttp\Client([
 sleep(mt_rand(2, 3));
 try {
     $locationResponse = $client->get($locationSearchUrl, [
-        // 'debug' => true,
         'headers' => $insta->getHeaders(),
     ]);
-} catch(RequestHeadersTooLargeException $tooLargeEx) {
-    header('Content-Type: text/json; charset=UTF-8', true);
-    header('Status: 200', true, 200);
-    $response = [
-        'success' => true,
-        'cookies' => $client->getConfig('cookies')->toArray(),
-        'ig' => [
-            'items' => [],
-            'has_more' => 'false'
-        ],
-    ];
-    echo json_encode($response);
-    die();
 } catch(\Exception $locSearchEx) {
     header('Content-Type: text/json; charset=UTF-8', true);
-    header('Status: 500', true, 500);
+    header('Status: 200', true, 200);
     $message = sprintf('Unable to request location list matching %s. CAUSE: %s',
         $query, $locSearchEx->getMessage());
     $response = [
         'message' => $message,
-        'success' => false
+        'cookies' => $client->getConfig('cookies')->toArray(),
+        'success' => false,
+        'ig' => [
+            'items' => [],
+            'rank_token' => '',
+            'has_more' => false
+        ]
     ];
     echo json_encode($response);
     die();
