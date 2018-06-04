@@ -12,6 +12,7 @@ class Location extends Component {
             searching: false,
             error: null,
             hasMore: false,
+            count: 50,
             rankToken: ''
         };
         this.inputLocation = React.createRef();
@@ -37,7 +38,6 @@ class Location extends Component {
         return translatedPath;
     }
     handlePostQueryError(reason) {
-        console.log(reason);
         setTimeout(() => {
             this.setState({
                 searching: false,
@@ -47,15 +47,15 @@ class Location extends Component {
         }, 1000);
     }
     handlePostQuerySuccess(response) {
-        const currentLocations = this.state.locations;
+        const currentList = this.state.locations;
         const data = response.data;
         const locations = data.ig.items.map(item => item.location);
-        // const newLocationsList = this.excludeFetched(currentLocations, locations);
+        const newLocationsList = this.excludeFetched(currentList, locations);
         setTimeout(() => {
             dumbu.cookies = data.cookies;
             this.setState({
                 searching: false,
-                locations: currentLocations.concat(locations), // newLocationsList,
+                locations: newLocationsList, // currentList.concat(locations),
                 rankToken: data.ig.rank_token,
                 hasMore: data.ig.has_more
             });
@@ -68,23 +68,18 @@ class Location extends Component {
         this.setState({ error: 'You must establish user credentials (username/password) first...' });
         return false;
     }
-    excludeFetched(currentLocations, fetchedLocations) {
-        if (currentLocations.length === 0) return fetchedLocations;
-        var trulyNewLocations = [];
-        var currentIds = currentLocations.reduce(function(prev, currentLoc, arr) {
-          return prev.concat(currentLoc.facebook_places_id);
-        }, []);
-        fetchedLocations.forEach(function (loc, i, arr) {
-          if (!currentIds.includes(loc.facebook_places_id)) {
-            trulyNewLocations.push(loc);
-          }
-        });
-        return current.concat(trulyNewLocations);
+    excludeFetched(currentList, fetchedList) {
+        if (currentList.length===0) return fetchedList;
+        const currentListIds = currentList.map(location => location.facebook_places_id);
+        const fetchedListIds = fetchedList.map(location => location.facebook_places_id);
+        const trulyNew = fetchedListIds.filter(id => currentListIds.includes(id) === false);
+        const newLocations = fetchedList.filter(location => trulyNew.includes(location.facebook_places_id));
+        return currentList.concat(newLocations);
     }
     postInputQuery(query) {
         if (this.state.searching) return;
         if (!this.validCredentials()) return;
-        this.setState({ error: null, searching: true });
+        this.setState({ error: null, searching: true, locations: [], hasMore: false });
         const dumbu = window.dumbu;
         const pathName = window.location.pathname;
         const path = this.translateToServerSide(pathName);
@@ -92,7 +87,7 @@ class Location extends Component {
             username: dumbu.username,
             password: dumbu.password,
             cookies: dumbu.cookies,
-            count: 10,
+            count: this.state.count,
             location: query,
             exclude_list: this.excludeList(this.state.locations),
             rank_token: this.state.rankToken
@@ -117,7 +112,7 @@ class Location extends Component {
             username: dumbu.username,
             password: dumbu.password,
             cookies: dumbu.cookies,
-            count: 10,
+            count: this.state.count,
             location: query,
             exclude_list: this.excludeList(this.state.locations),
             rank_token: this.state.rankToken
