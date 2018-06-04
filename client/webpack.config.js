@@ -42,6 +42,22 @@ module.exports = {
             {
                 from: './node_modules/font-awesome/fonts',
                 to: publicPath + '/fonts'
+            },
+            {
+                from: './bower_components/toastr/toastr.min.js',
+                to: publicPath + '/js/'
+            },
+            {
+                from: './bower_components/toastr/toastr.min.css',
+                to: publicPath + '/css/'
+            },
+            {
+                from: './node_modules/nprogress/nprogress.js',
+                to: publicPath + '/js/'
+            },
+            {
+                from: './node_modules/nprogress/nprogress.css',
+                to: publicPath + '/css/'
             }
         ])
     ],

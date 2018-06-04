@@ -12,7 +12,7 @@ class Location extends Component {
             searching: false,
             error: null,
             hasMore: false,
-            count: 50,
+            count: 10,
             rankToken: ''
         };
         this.inputLocation = React.createRef();
@@ -44,6 +44,7 @@ class Location extends Component {
                 locations: [],
                 error: reason.message
             });
+            NProgress.done();
         }, 1000);
     }
     handlePostQuerySuccess(response) {
@@ -51,6 +52,8 @@ class Location extends Component {
         const data = response.data;
         const locations = data.ig.items.map(item => item.location);
         const newLocationsList = this.excludeFetched(currentList, locations);
+        const diff = newLocationsList.length - currentList.length;
+        toastr["success"](`Loaded ${diff} new geolocations`, "Geolocation search");
         setTimeout(() => {
             dumbu.cookies = data.cookies;
             this.setState({
@@ -59,6 +62,7 @@ class Location extends Component {
                 rankToken: data.ig.rank_token,
                 hasMore: data.ig.has_more
             });
+            NProgress.done();
         }, 1000);
     }
     validCredentials() {
@@ -79,6 +83,7 @@ class Location extends Component {
     postInputQuery(query) {
         if (this.state.searching) return;
         if (!this.validCredentials()) return;
+        NProgress.start();
         this.setState({ error: null, searching: true, locations: [], hasMore: false });
         const dumbu = window.dumbu;
         const pathName = window.location.pathname;
@@ -103,6 +108,7 @@ class Location extends Component {
         return locations.reduce(reducer, initial);
     }
     searchMore() {
+        NProgress.start();
         this.setState({ error: null, searching: true });
         const dumbu = window.dumbu;
         const pathName = window.location.pathname;

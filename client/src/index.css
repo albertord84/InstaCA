@@ -28,3 +28,7 @@ nav div.float-right div.dropdown-menu form input.form-control::placeholder {
     width: 150px;
     cursor: pointer;
 }
+
+#nprogress .spinner {
+    top: 20px;
+}
