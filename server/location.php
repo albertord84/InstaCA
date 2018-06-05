@@ -3,8 +3,8 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 use \InstaCA\InstaCA;
+use \InstaCA\Location;
 use \InstagramAPI\Signatures;
-use \InstagramAPI\Exception\RequestHeadersTooLargeException;
 use \GuzzleHttp\Cookie\SetCookie;
 use \GuzzleHttp\Cookie\CookieJar;
 
@@ -34,24 +34,14 @@ $count = $requestData['count'];
 $rank_token = $requestData['rank_token'];
 $exclude_list = $requestData['exclude_list'];
 
-$locationSearchUrl = "https://i.instagram.com/api/v1/fbsearch/places/?timezone_offset=0" .
-        "&count=$count&query=$query&exclude_list=[$exclude_list]&rank_token=$rank_token";
-
-$cookiesArray = array_reduce($cookies, function($array, $cookie) {
-    $array[] = new SetCookie($cookie);
-    return $array;
-}, []);
-
-$jar = new CookieJar(false, $cookiesArray);
-$client = new \GuzzleHttp\Client([
-    'cookies' => $jar,
-]);
+$location = new Location($cookies);
 
 sleep(mt_rand(2, 3));
 try {
-    $locationResponse = $client->get($locationSearchUrl, [
-        'headers' => $insta->getHeaders(),
-    ]);
+    header('Content-Type: text/json; charset=UTF-8', true);
+    header('Status: 200', true, 200);
+    $response = $location->search($query, $count, $exclude_list, $rank_token);
+    echo json_encode($response);
 } catch(\Exception $locSearchEx) {
     header('Content-Type: text/json; charset=UTF-8', true);
     header('Status: 200', true, 200);
@@ -59,7 +49,7 @@ try {
         $query, $locSearchEx->getMessage());
     $response = [
         'message' => $message,
-        'cookies' => $client->getConfig('cookies')->toArray(),
+        'cookies' => $cookies,
         'success' => false,
         'ig' => [
             'items' => [],
@@ -70,14 +60,3 @@ try {
     echo json_encode($response);
     die();
 }
-
-$data = json_decode((string) $locationResponse->getBody());
-header('Content-Type: text/json; charset=UTF-8', true);
-header('Status: 200', true, 200);
-$response = [
-    'success' => true,
-    'cookies' => $client->getConfig('cookies')->toArray(),
-    'ig' => $data,
-];
-echo json_encode($response);
-die();
