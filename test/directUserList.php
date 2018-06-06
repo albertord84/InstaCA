@@ -50,7 +50,9 @@ function save_list($dest_file, $usersArray) {
 }
 
 function next_exec_hour() {
-  return (int) date('G') + mt_rand(1, 3);
+  $h = (int) date('G') + mt_rand(1, 3);
+  if ($h > 24) return $h - 24;
+  return $h;
 }
 
 function save_exec_hour($hour) {
