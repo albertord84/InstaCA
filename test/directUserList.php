@@ -76,7 +76,6 @@ foreach ($usersList as $user) {
       $userIdEx->getMessage());
     continue;
   }
-  sleep(mt_rand(60, 180));
   try {
     $ig->direct->sendText([ 'users' => [ $user_id ] ], $msg);
     printf("Sent the message to %s successfully\n", $u);
@@ -90,4 +89,5 @@ foreach ($usersList as $user) {
     save_list($file_list, $purgedList);
     die();
   }
+  sleep(mt_rand(60, 180));
 }
