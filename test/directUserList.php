@@ -51,8 +51,9 @@ function save_list($dest_file, $usersArray) {
 
 ///////////////////////////////////////////////////////////////////
 
-$purgedList = [];
 $usersList = load_list_to_array($file_list);
+$purgedList = $usersList;
+
 printf("Created a list of %s users to be notified\n", count($usersList));
 
 try {
@@ -80,7 +81,7 @@ foreach ($usersList as $user) {
   try {
     $ig->direct->sendText([ 'users' => [ $user_id ] ], $msg);
     printf("Sent the message to %s successfully\n", $u);
-    $purgedList = array_filter($usersList, function($user) use ($u) {
+    $purgedList = array_filter($purgedList, function($user) use ($u) {
       return $user !== $u;
     });
   }
