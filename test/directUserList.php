@@ -68,6 +68,7 @@ foreach ($usersList as $user) {
   $u = prepare_username($user);
   if ($u === '') continue;
   try {
+    sleep(mt_rand(10, 30));
     $user_id = $ig->people->getUserIdForName($u);
     printf("Resolved the id of %s (%s)\n", $u, $user_id);
   }
