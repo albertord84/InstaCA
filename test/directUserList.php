@@ -49,6 +49,23 @@ function save_list($dest_file, $usersArray) {
   }
 }
 
+function next_exec_hour() {
+  return (int) date('G') + mt_rand(1, 3);
+}
+
+function save_exec_hour($hour) {
+  try {
+    $fp = fopen('/tmp/next_exec_hour.txt', 'w');
+    fwrite($fp, $hour);
+    fclose($fp);
+    printf("Saved the next execution hour: at %s\n", $hour);
+  }
+  catch (\Exception $saveExecHour) {
+    printf("Could not save the next exec hour: \"%s\"\n",
+      $saveExecHour->getMessage());
+  }
+}
+
 ///////////////////////////////////////////////////////////////////
 
 $usersList = load_list_to_array($file_list);
@@ -89,6 +106,8 @@ foreach ($usersList as $user) {
     printf("Error sending notification to %s: \"%s\"\n", $u,
       $msgEx->getMessage());
     save_list($file_list, $purgedList);
+    $next_exec_at = next_exec_hour();
+    save_exec_hour($next_exec_at);
     die();
   }
   sleep(mt_rand(60, 180));
