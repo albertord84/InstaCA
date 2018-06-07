@@ -68,6 +68,13 @@ function save_exec_hour($hour) {
   }
 }
 
+function remove_user_from_list($list, $user) {
+  $new_list = array_filter($list, function($u) use ($user) {
+    return $u !== $user;
+  });
+  return $new_list;
+}
+
 ///////////////////////////////////////////////////////////////////
 
 $usersList = load_list_to_array($file_list);
@@ -98,14 +105,13 @@ foreach ($usersList as $user) {
   catch(\Exception $userIdEx) {
     printf("The id of %s was not found: \"%s\"\n", $u,
       $userIdEx->getMessage());
+    $purgedList = remove_user_from_list($purgedList, $u);
     continue;
   }
   try {
     $ig->direct->sendText([ 'users' => [ $user_id ] ], $msg);
     printf("Sent the message to %s successfully\n", $u);
-    $purgedList = array_filter($purgedList, function($user) use ($u) {
-      return $user !== $u;
-    });
+    $purgedList = remove_user_from_list($purgedList, $u);
   }
   catch(\Exception $msgEx) {
     printf("Error sending notification to %s: \"%s\"\n", $u,
