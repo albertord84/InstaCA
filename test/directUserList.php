@@ -2,6 +2,8 @@
 set_time_limit(0);
 require __DIR__ . '/../vendor/autoload.php';
 
+define('PID_FILE', '/tmp/next_exec.pid');
+
 $debug = false;
 $truncatedDebug = false;
 $ig = new \InstagramAPI\Instagram($debug, $truncatedDebug);
@@ -77,7 +79,7 @@ function remove_user_from_list($list, $user) {
 
 function create_pid_file() {
   try {
-    file_put_contents('/tmp/next_exec.pid', '');
+    file_put_contents(PID_FILE, '');
   }
   catch(\Exception $pidEx) {
     printf("Could not create pid file: \"%s\"\n", $pidEx->getMessage());
@@ -86,7 +88,7 @@ function create_pid_file() {
 }
 
 function remove_pid_file() {
-  $pid = '/tmp/next_exec.pid';
+  $pid = PID_FILE;
   if (file_exists($pid)) {
     try {
       unlink($pid);
@@ -98,9 +100,13 @@ function remove_pid_file() {
   }
 }
 
+function is_running() {
+  return file_exists(PID_FILE);
+}
+
 ///////////////////////////////////////////////////////////////////
 
-if (file_exists('/tmp/next_exec.pid')) {
+if (is_running()) {
   printf("We are already running. I will terminate right now.\n");
   die();
 }
@@ -109,7 +115,8 @@ create_pid_file();
 $usersList = load_list_to_array($file_list);
 $purgedList = $usersList;
 if (count($usersList)===0) {
-  printf("There are no users to be notified for now. The list is empty.\n");
+  printf("The user list is empty, so we are done.\n");
+  remove_pid_file();
   die();
 }
 printf("Created a list of %s users to be notified\n", count($usersList));
