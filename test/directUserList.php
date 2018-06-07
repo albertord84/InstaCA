@@ -24,8 +24,8 @@ function load_list_to_array($file_list) {
   try {
     $array = file($file_list, FILE_IGNORE_NEW_LINES);
   } catch (\Exception $listEx) {
-    printf("Impossible to load users list: \"%s\"\n",
-      $listEx->getMessage());
+    printf("%s Impossible to load users list: \"%s\"\n",
+      time_str(), $listEx->getMessage());
     die();
   }
   return $array;
@@ -46,8 +46,8 @@ function save_list($dest_file, $usersArray) {
     fclose($fp);
   }
   catch (\Exception $exportEx) {
-    printf("Could not save already notified users list: \"%s\"\n",
-      $exportEx->getMessage());
+    printf("%s Could not save already notified users list: \"%s\"\n",
+      time_str(), $exportEx->getMessage());
   }
 }
 
@@ -62,11 +62,11 @@ function save_exec_hour($hour) {
     $fp = fopen('/tmp/next_exec_hour.txt', 'w');
     fwrite($fp, $hour);
     fclose($fp);
-    printf("Saved the next execution hour: at %s\n", $hour);
+    printf("%s Saved the next execution hour: at %s\n", time_str(), $hour);
   }
   catch (\Exception $saveExecHour) {
-    printf("Could not save the next exec hour: \"%s\"\n",
-      $saveExecHour->getMessage());
+    printf("%s Could not save the next exec hour: \"%s\"\n",
+      time_str(), $saveExecHour->getMessage());
   }
 }
 
@@ -82,7 +82,8 @@ function create_pid_file() {
     file_put_contents(PID_FILE, '');
   }
   catch(\Exception $pidEx) {
-    printf("Could not create pid file: \"%s\"\n", $pidEx->getMessage());
+    printf("%s Could not create pid file: \"%s\"\n",
+      time_str(), $pidEx->getMessage());
     exit(1);
   }
 }
@@ -94,7 +95,8 @@ function remove_pid_file() {
       unlink($pid);
     }
     catch(\Exception $pidEx) {
-      printf("Could not delete pid file: \"%s\"\n", $pidEx->getMessage());
+      printf("%s Could not delete pid file: \"%s\"\n",
+        time_str(), $pidEx->getMessage());
       exit(1);
     }
   }
@@ -104,10 +106,18 @@ function is_running() {
   return file_exists(PID_FILE);
 }
 
+function time_str() {
+  $d = date('j');
+  return sprintf("%s %s %s", date('M'),
+    strlen($d) === 2 ? $d : ' ' . $d,
+    date('G:i:s'));
+}
+
 ///////////////////////////////////////////////////////////////////
 
 if (is_running()) {
-  printf("We are already running. I will terminate right now.\n");
+  printf("%s We are already running. I will terminate right now.\n",
+    time_str());
   die();
 }
 
@@ -115,19 +125,20 @@ create_pid_file();
 $usersList = load_list_to_array($file_list);
 $purgedList = $usersList;
 if (count($usersList)===0) {
-  printf("The user list is empty, so we are done.\n");
+  printf("%s The user list is empty, so we are done.\n", time_str());
   remove_pid_file();
   die();
 }
-printf("Created a list of %s users to be notified\n", count($usersList));
+printf("%s Created a list of %s users to be notified\n",
+  time_str(), count($usersList));
 
 try {
-  printf("Using %s username to log in\n", $username);
+  printf("%s Using %s username to log in\n", time_str(), $username);
   $ig->login($username, $password);
-  printf("Logged in as %s\n", $username);
+  printf("%s Logged in as %s\n", time_str(), $username);
 } catch (\Exception $logEx) {
-  printf("Could not logged in as user %s: \"%s\"\n",
-    $username, $logEx->getMessage());
+  printf("%s Could not logged in as user %s: \"%s\"\n",
+    time_str(), $username, $logEx->getMessage());
   remove_pid_file();
   exit(1);
 }
@@ -137,22 +148,22 @@ foreach ($usersList as $user) {
   try {
     sleep(mt_rand(10, 30));
     $user_id = $ig->people->getUserIdForName($u);
-    printf("Resolved the id of %s (%s)\n", $u, $user_id);
+    printf("%s Resolved the id of %s (%s)\n", time_str(), $u, $user_id);
   }
   catch(\Exception $userIdEx) {
-    printf("The id of %s was not found: \"%s\"\n", $u,
-      $userIdEx->getMessage());
+    printf("%s The id of %s was not found: \"%s\"\n", time_str(),
+      $u, $userIdEx->getMessage());
     $purgedList = remove_user_from_list($purgedList, $u);
     continue;
   }
   try {
     $ig->direct->sendText([ 'users' => [ $user_id ] ], $msg);
-    printf("Sent the message to %s successfully\n", $u);
+    printf("%s Sent the message to %s successfully\n", time_str(), $u);
     $purgedList = remove_user_from_list($purgedList, $u);
   }
   catch(\Exception $msgEx) {
-    printf("Error sending notification to %s: \"%s\"\n", $u,
-      $msgEx->getMessage());
+    printf("%s Error sending notification to %s: \"%s\"\n", 
+      time_str(), $u, $msgEx->getMessage());
     save_list($file_list, $purgedList);
     $next_exec_at = next_exec_hour();
     save_exec_hour($next_exec_at);
