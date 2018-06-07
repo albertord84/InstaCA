@@ -3,6 +3,7 @@ set_time_limit(0);
 require __DIR__ . '/../vendor/autoload.php';
 
 define('PID_FILE', '/tmp/next_exec.pid');
+define('NEXT_EXEC_HOUR_FILE', '/tmp/next_exec_hour.txt');
 
 $debug = false;
 $truncatedDebug = false;
@@ -57,9 +58,9 @@ function next_exec_hour() {
   return $h;
 }
 
-function save_exec_hour($hour) {
+function save_exec_hour($dest_file, $hour) {
   try {
-    $fp = fopen('/tmp/next_exec_hour.txt', 'w');
+    $fp = fopen($dest_file, 'w');
     fwrite($fp, $hour);
     fclose($fp);
     printf("%s Saved the next execution hour: at %s\n", time_str(), $hour);
@@ -166,7 +167,7 @@ foreach ($usersList as $user) {
       time_str(), $u, $msgEx->getMessage());
     save_list($file_list, $purgedList);
     $next_exec_at = next_exec_hour();
-    save_exec_hour($next_exec_at);
+    save_exec_hour(NEXT_EXEC_HOUR_FILE, $next_exec_at);
     remove_pid_file();
     die();
   }
