@@ -72,7 +72,10 @@ function save_exec_hour($hour) {
 
 $usersList = load_list_to_array($file_list);
 $purgedList = $usersList;
-
+if (count($usersList)===0) {
+  printf("There are no users to be notified for now. The list is empty.\n");
+  die();
+}
 printf("Created a list of %s users to be notified\n", count($usersList));
 
 try {
