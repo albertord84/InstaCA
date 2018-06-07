@@ -75,8 +75,37 @@ function remove_user_from_list($list, $user) {
   return $new_list;
 }
 
+function create_pid_file() {
+  try {
+    file_put_contents('/tmp/next_exec.pid', '');
+  }
+  catch(\Exception $pidEx) {
+    printf("Could not create pid file: \"%s\"\n", $pidEx->getMessage());
+    exit(1);
+  }
+}
+
+function remove_pid_file() {
+  $pid = '/tmp/next_exec.pid';
+  if (file_exists($pid)) {
+    try {
+      unlink($pid);
+    }
+    catch(\Exception $pidEx) {
+      printf("Could not delete pid file: \"%s\"\n", $pidEx->getMessage());
+      exit(1);
+    }
+  }
+}
+
 ///////////////////////////////////////////////////////////////////
 
+if (file_exists('/tmp/next_exec.pid')) {
+  printf("We are already running. I will terminate right now.\n");
+  die();
+}
+
+create_pid_file();
 $usersList = load_list_to_array($file_list);
 $purgedList = $usersList;
 if (count($usersList)===0) {
@@ -92,7 +121,8 @@ try {
 } catch (\Exception $logEx) {
   printf("Could not logged in as user %s: \"%s\"\n",
     $username, $logEx->getMessage());
-  exit(0);
+  remove_pid_file();
+  exit(1);
 }
 foreach ($usersList as $user) {
   $u = prepare_username($user);
@@ -119,7 +149,10 @@ foreach ($usersList as $user) {
     save_list($file_list, $purgedList);
     $next_exec_at = next_exec_hour();
     save_exec_hour($next_exec_at);
+    remove_pid_file();
     die();
   }
   sleep(mt_rand(60, 180));
 }
+
+remove_pid_file();
