@@ -2,6 +2,7 @@
 set_time_limit(0);
 require __DIR__ . '/../vendor/autoload.php';
 
+define('PROCESS_NAME', 'directUserList');
 define('PID_FILE', '/tmp/next_exec.pid');
 define('NEXT_EXEC_HOUR_FILE', '/tmp/next_exec_hour.txt');
 
@@ -109,11 +110,11 @@ function is_running() {
   return file_exists(PID_FILE);
 }
 
-function time_str() {
+function time_str($pname = true) {
   $d = date('j');
   return sprintf("%s %s %s", date('M'),
     strlen($d) === 2 ? $d : ' ' . $d,
-    date('G:i:s'));
+    date('G:i:s') . $pname ? ' ' . PROCESS_NAME : '');
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -176,4 +177,6 @@ foreach ($usersList as $user) {
   sleep(mt_rand(60, 180));
 }
 
+printf("%s Terminated\n", 
+    time_str());
 remove_pid_file();
