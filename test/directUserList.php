@@ -177,6 +177,6 @@ foreach ($usersList as $user) {
   sleep(mt_rand(60, 180));
 }
 
-printf("%s Terminated\n", 
-    time_str());
+save_list($file_list, $purgedList);
+printf("%s Terminated\n", time_str());
 remove_pid_file();
