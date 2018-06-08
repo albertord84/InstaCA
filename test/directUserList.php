@@ -27,6 +27,7 @@ function load_list_to_array($file_list) {
   } catch (\Exception $listEx) {
     printf("%s Impossible to load users list: \"%s\"\n",
       time_str(), $listEx->getMessage());
+    remove_pid_file();
     die();
   }
   return $array;
@@ -54,6 +55,7 @@ function save_list($dest_file, $usersArray) {
 
 function next_exec_hour() {
   $h = (int) date('G') + mt_rand(1, 3);
+  if ($h < 10) $h = '0' . $h;
   if ($h > 24) return $h - 24;
   return $h;
 }
