@@ -54,6 +54,16 @@ function save_list($dest_file, $usersArray) {
   }
 }
 
+function get_next_exec_hour($next_exec_hour_file) {
+  if (file_exists($next_exec_hour_file)) {
+    $exec_hour = (int) trim(file_get_contents($next_exec_hour_file));
+  }
+  else {
+    $exec_hour = (int) date('G');
+  }
+  return $exec_hour;
+}
+
 function next_exec_hour() {
   $h = (int) date('G') + mt_rand(1, 3);
   if ($h < 10) $h = '0' . $h;
@@ -114,7 +124,7 @@ function time_str($pname = true) {
   $d = date('j');
   return sprintf("%s %s %s", date('M'),
     strlen($d) === 2 ? $d : ' ' . $d,
-    date('G:i:s') . $pname ? ' ' . PROCESS_NAME : '');
+    date('G:i:s') . $pname ? date('G:i:s') . ' ' . PROCESS_NAME : '');
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -124,6 +134,13 @@ if (is_running()) {
     time_str());
   die();
 }
+
+if ((int) date('G') !== get_next_exec_hour(NEXT_EXEC_HOUR_FILE)) {
+  printf("%s Not the corresponding execution hour. Terminating...\n", time_str());
+  die();
+}
+
+printf("%s Everything goes fine. We will start...\n", time_str());
 
 create_pid_file();
 $usersList = load_list_to_array($file_list);
