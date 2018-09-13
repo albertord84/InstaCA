@@ -2,8 +2,6 @@ import React, { Component } from 'react';
 import { HashRouter, Route, Link, Redirect } from 'react-router-dom';
 import { browserHistory } from 'react-router';
 
-import * as _ from 'lodash';
-
 import Location from './Location';
 import Hashtag from './Hashtag';
 

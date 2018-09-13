@@ -50,7 +50,7 @@ class Location extends Component {
     handlePostQuerySuccess(response) {
         const currentList = this.state.locations;
         const data = response.data;
-        const locations = data.ig.items.map(item => item.location);
+        const locations = data.items.map(item => item.location);
         const newLocationsList = this.excludeFetched(currentList, locations);
         const diff = newLocationsList.length - currentList.length;
         toastr["success"](`Loaded ${diff} new geolocations`, "Geolocation search");
@@ -59,8 +59,8 @@ class Location extends Component {
             this.setState({
                 searching: false,
                 locations: newLocationsList, // currentList.concat(locations),
-                rankToken: data.ig.rank_token,
-                hasMore: data.ig.has_more
+                rankToken: data.rank_token,
+                hasMore: data.has_more
             });
             NProgress.done();
         }, 1000);
@@ -88,7 +88,7 @@ class Location extends Component {
         const dumbu = window.dumbu;
         const pathName = window.location.pathname;
         const path = this.translateToServerSide(pathName);
-        axios.post(path + '/location.php', {
+        axios.post(path + '/location_api.php', {
             username: dumbu.username,
             password: dumbu.password,
             cookies: dumbu.cookies,

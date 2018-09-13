@@ -20,6 +20,10 @@ module.exports = {
         new CleanObsoleteChunks(),
         new CopyWebpackPlugin([
             {
+                from: './node_modules/lodash/lodash.min.js',
+                to: publicPath + '/js/'
+            },
+            {
                 from: './node_modules/jquery/dist/jquery.min.js',
                 to: publicPath + '/js/'
             },
@@ -41,7 +45,8 @@ module.exports = {
             },
             {
                 from: './node_modules/font-awesome/fonts',
-                to: publicPath + '/fonts'
+                to: publicPath + '/fonts',
+                ignore: [ '*.svg' ]
             },
             {
                 from: './bower_components/toastr/toastr.min.js',

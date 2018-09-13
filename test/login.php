@@ -33,14 +33,14 @@ $password = in_array('password', array_keys($_REQUEST)) ?
 		$response = null;
 		if (trim($username) !== '') {
 			try {
-				$response = $insta->login();
+				$response = $insta->login($username, $password);
 			}
 			catch (\Exception $ex) {
 				$response = $ex->getMessage();
 			}
 		}
 		?>
-		<textarea rows="20"><?php echo json_encode($response['cookies']); ?></textarea>
+		<textarea rows="20"><?php echo json_encode($response); ?></textarea>
 	</div>
 </body>
 </html>
