@@ -164,6 +164,11 @@ class InstaCA {
         return $client;
     }
 
+    public function setProxy($proxies) {
+        $this->withProxy = true;
+        $this->proxies = $proxies;
+    }
+
     private function getUserAgent() {
         return $this->userAgent;
     }

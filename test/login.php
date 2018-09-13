@@ -33,6 +33,10 @@ $password = in_array('password', array_keys($_REQUEST)) ?
 		$response = null;
 		if (trim($username) !== '') {
 			try {
+				$insta->setProxy([
+					'http' => "tcp://albertreye9917:3r4rcz0b1v@172.84.73.213:21287",
+					'https' => "tcp://albertreye9917:3r4rcz0b1v@172.84.73.213:21287"
+				]);
 				$response = $insta->login($username, $password);
 			}
 			catch (\Exception $ex) {
