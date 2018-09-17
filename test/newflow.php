@@ -4,15 +4,23 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use \InstagramAPI\Signatures;
 use \InstagramAPI\Constants;
+
 use \GuzzleHttp\Client;
 use \GuzzleHttp\Cookie\SetCookie;
 use \GuzzleHttp\Cookie\CookieJar;
+use \GuzzleHttp\Psr7\Request;
+use \GuzzleHttp\Psr7\Response;
 
 $client = null;
 $deviceId = Signatures::generateUUID();
 $phoneId = Signatures::generateUUID();
 
 $initUrl = '/api/v1/fb/show_continue_as/';
+$secondUrl = '/api/v1/accounts/msisdn_header_bootstrap/';
+$thirdUrl = '/api/v1/qe/sync/';
+$fourthUrl = '/api/v1/attribution/log_attribution/';
+$fifthUrl = '/api/v1/accounts/contact_point_prefill/';
+$finalUrl = '/api/v1/accounts/login/';
 
 function isDebug($debug = true) {
   return $debug;
@@ -23,8 +31,8 @@ function getUserAgent($userAgent = '') {
   return $userAgent === '' ? $_userAgent : $userAgent;
 }
 
-function getHeaders() {
-  $headers = [
+function getHeaders($headers = []) {
+  $_headers = [
     'User-Agent' => getUserAgent(),
     'X-IG-Connection-Speed' => '-1kbps',
     'X-IG-Bandwidth-Speed-KBPS' => '-1.000',
@@ -38,18 +46,17 @@ function getHeaders() {
     'Connection' => 'Keep-Alive',
     'Accept-Encoding' => 'gzip',
   ];
-  return $headers;
+  return array_merge($_headers, $headers);
 }
 
-function createClient($_options = []) {
+function createClient($options = []) {
   $jar = new CookieJar;
-  $options = [
+  $_options = [
     'base_uri' => 'https://b.i.instagram.com',
     'cookies' => $jar,
-    'debug' => isDebug(),
-    'headers' => getHeaders(),
+    'debug' => isDebug()
   ];
-  $combined = array_merge($options, $_options);
+  $combined = array_merge($_options, $options);
   $client = new Client($combined);
   return $client;
 }
@@ -62,20 +69,98 @@ function generateRequestBody($data) {
 }
 
 try {
-  $cookies = new CookieJar;
-  $data = [
+  $body = generateRequestBody([
     "phone_id" => $phoneId,
     "screen" => "landing",
     "device_id" => $deviceId,
-  ];
-  $client = createClient([
-    'body' => generateRequestBody($data),
   ]);
-  $response = $client->post($initUrl);
+  $initialRequest = new Request('POST', $initUrl, getHeaders(), $body);
+  $client = createClient();
+  $response = $client->send($initialRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception('Something happened starting the conversation with remote endpoint');
+  }
+  sleep(2);
+  $body = generateRequestBody([
+    'mobile_subno_usage' => 'ig_select_app',
+    'device_id' => $deviceId,
+  ]);
+  $secondRequest = new Request('POST', $secondUrl, getHeaders(), $body);
+  $response = $client->send($secondRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception('Something happened at the stage two of the conversation with remote endpoint');
+  }
+  sleep(3);
+  $body = generateRequestBody([
+    'id' => $deviceId,
+    'experiments' => Constants::LOGIN_EXPERIMENTS,
+  ]);
+  $thirdRequest = new Request('POST', $thirdUrl,
+    getHeaders([ 'X-DEVICE-ID' => $deviceId ]),
+    $body);
+  $response = $client->send($thirdRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception('Something happened syncing device features with remote endpoint');
+  }
+  sleep(2);
+  $adid = Signatures::generateUUID();
+  $body = generateRequestBody([
+    'adid' => $adid
+  ]);
+  $fourthRequest = new Request('POST', $fourthUrl, getHeaders(), $body);
+  $response = $client->send($fourthRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception('Something happened requesting the log attribution');
+  }
+  sleep(3);
+  $body = generateRequestBody([
+    'phone_id' => $phoneId,
+    'usage' => 'prefill',
+  ]);
   $cookies = $client->getConfig('cookies');
-  $body = $response->getBody();
-  var_dump($cookies);
-  echo $body;
+  $fifthRequest = new Request('POST', $fifthUrl,
+    getHeaders([
+      'Cookie' => sprintf("rur=%s; mcd=%s; mid=%s",
+        $cookies->getCookieValue('rur'),
+        $cookies->getCookieValue('mcd'),
+        $cookies->getCookieValue('mid'))
+    ]),
+    $body);
+  $response = $client->send($fifthRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception('Something happened requesting the log attribution');
+  }
+  sleep(1);
+  $username = 'fulanitoperez';
+  $body = generateRequestBody([
+    'phone_id' => $phoneId,
+    'username' => $username,
+    'adid' => $adid,
+    'guid' => $deviceId,
+    'device_id' => Signatures::generateDeviceId(),
+    'password' => '*************',
+    'login_attempt_count' => 0
+  ]);
+  $cookies = $client->getConfig('cookies');
+  $finalRequest = new Request('POST', $finalUrl,
+    getHeaders([
+      'Cookie' => sprintf("rur=%s; mcd=%s; mid=%s",
+        $cookies->getCookieValue('rur'),
+        $cookies->getCookieValue('mcd'),
+        $cookies->getCookieValue('mid'))
+    ]),
+    $body);
+  $response = $client->send($finalRequest);
+  $data = json_decode($response->getBody()->getContents());
+  if ($data->status!=='ok') {
+    throw new \Exception("Something happened logging the user $username");
+  }
+  var_dump($data);
 } catch (\Exception $e) {
-  echo "ERROR: " . $e->getMessage();
+  echo date("G:i:s") . " - ERROR: " . $e->getMessage();
 }
